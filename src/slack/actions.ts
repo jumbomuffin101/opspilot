@@ -1,4 +1,2 @@
-import type { SlackHandlerRegistration } from "@/src/types/slack";
-
-// Interactive action registration is intentionally reserved for the next implementation stage.
-export const actionRegistrations: readonly SlackHandlerRegistration[] = [];
+// Interactive action handlers are intentionally reserved for Stage 4.
+export {};

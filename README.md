@@ -2,7 +2,7 @@
 
 OpsPilot is an AI incident commander designed to live inside Slack. It will bring incident context, deployment evidence, ownership, timelines, and recommended response actions into the channel where responders are already working.
 
-> Submission project for the **Slack Agent Builder Challenge**. This repository currently contains the production-oriented scaffold only; command handling and AI execution are intentionally deferred.
+> Submission project for the **Slack Agent Builder Challenge**. Stage 2 implements a signed `/opspilot` slash command with deterministic mock investigation output. OpenAI and real-time search remain intentionally deferred.
 
 ## Architecture
 
@@ -10,11 +10,11 @@ OpsPilot uses a modular TypeScript architecture so Slack transport, agent orches
 
 ```text
 Slack interface
-      │
-      ▼
-Slack handlers ──► Incident agent ──► Domain tools
-                         │                 │
-                         ▼                 ▼
+      |
+      v
+Slack handlers ---> Incident agent ---> Domain tools
+                         |                  |
+                         v                  v
                   Service adapters   Incident/deployment data
                   (OpenAI, GitHub,
                    Slack search)
@@ -52,7 +52,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The environment variables may remain empty while working on the landing page and mock-data scaffold.
+Open [http://localhost:3000](http://localhost:3000). The landing page does not require credentials. Signed Slack command requests require `SLACK_SIGNING_SECRET`, and posting investigation results requires `SLACK_BOT_TOKEN`.
 
 Quality checks:
 
@@ -64,9 +64,29 @@ npm run build
 
 ## Slack setup
 
-Slack app installation and Agent Builder configuration will be documented when the interaction layer is implemented. The intended configuration will use `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, and `SLACK_APP_TOKEN`; do not commit real credentials.
+1. Create or open the Slack app used for OpsPilot.
+2. Under **OAuth & Permissions**, add these bot token scopes:
+   - `commands` — receive `/opspilot` invocations.
+   - `chat:write` — post the completed investigation to the channel.
+   - `chat:write.public` — optional, if OpsPilot must post in public channels it has not joined.
+3. Install or reinstall the app to the workspace after changing scopes.
+4. Under **Slash Commands**, create `/opspilot` and set its request URL to:
 
-No slash commands or interactive actions are registered in this scaffolding stage.
+   ```text
+   https://<your-domain>/api/slack/commands
+   ```
+
+5. Copy the app's signing secret and bot token into `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN`.
+
+For local development, expose the Next.js server through an HTTPS tunnel and use the tunnel URL for the request URL. Never commit real credentials.
+
+Example command:
+
+```text
+/opspilot investigate checkout API is failing after latest deploy
+```
+
+OpsPilot acknowledges the command immediately, runs a deterministic mock investigation after the response, and posts the result through `chat.postMessage`. The Block Kit action buttons are presentation-only in Stage 2; no action handlers are implemented yet.
 
 ## Deployment
 
@@ -97,8 +117,8 @@ OpsPilot is being built for the Slack Agent Builder Challenge. The goal is a Sla
 
 ## Roadmap
 
-- Connect the official Slack agent interaction flow and request verification
-- Add incident lifecycle actions and Slack-native Block Kit views
+- Implement incident lifecycle action handlers for the prepared Block Kit buttons
+- Add idempotency and retry handling for Slack command deliveries
 - Implement grounded incident synthesis with OpenAI
 - Correlate GitHub deployments with operational signals
 - Add Slack search with scoped evidence and citations

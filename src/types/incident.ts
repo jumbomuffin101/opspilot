@@ -37,3 +37,34 @@ export interface Incident {
   timeline: IncidentTimelineEntry[];
   owners: IncidentOwner[];
 }
+
+export interface SimilarIncident {
+  id: string;
+  title: string;
+  severity: IncidentSeverity;
+  resolution: string;
+}
+
+export interface DeploymentClue {
+  deploymentId: string;
+  service: string;
+  environment: string;
+  sha: string;
+  summary: string;
+  deployedAt: string;
+  status: string;
+}
+
+export interface IncidentInvestigation {
+  issueText: string;
+  title: string;
+  severity: IncidentSeverity;
+  suspectedService: string;
+  summary: string;
+  likelyRootCauses: string[];
+  evidence: IncidentEvidence[];
+  similarIncidents: SimilarIncident[];
+  recentDeploymentClues: DeploymentClue[];
+  recommendedNextSteps: string[];
+  suggestedOwners: IncidentOwner[];
+}
