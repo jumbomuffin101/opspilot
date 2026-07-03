@@ -1,0 +1,41 @@
+import type { DeploymentRecord } from "@/src/types/github";
+
+export const mockDeployments = [
+  {
+    id: "dep_01JYP7A9Q2",
+    repository: { owner: "acme-commerce", name: "checkout-api" },
+    environment: "production",
+    status: "rolled_back",
+    sha: "8b6e5a91d242",
+    branch: "main",
+    author: "Maya Chen",
+    summary: "Release checkout-api 2.18.0 with connection-pool tuning",
+    deployedAt: "2026-06-28T14:00:00.000Z",
+    completedAt: "2026-06-28T14:03:00.000Z",
+    url: "https://github.com/acme-commerce/checkout-api/actions/runs/1842",
+  },
+  {
+    id: "dep_01JYP79CW8",
+    repository: { owner: "acme-commerce", name: "checkout-api" },
+    environment: "production",
+    status: "success",
+    sha: "f17d2b54c981",
+    branch: "main",
+    author: "Release Automation",
+    summary: "Restore checkout-api 2.17.6",
+    deployedAt: "2026-06-28T14:14:00.000Z",
+    completedAt: "2026-06-28T14:18:00.000Z",
+  },
+  {
+    id: "dep_01JYJ9DB41",
+    repository: { owner: "acme-commerce", name: "fulfillment-events" },
+    environment: "production-eu",
+    status: "success",
+    sha: "4c2aa135ef70",
+    branch: "main",
+    author: "Priya Shah",
+    summary: "Increase event consumer capacity in eu-west-1",
+    deployedAt: "2026-06-24T09:31:00.000Z",
+    completedAt: "2026-06-24T09:36:00.000Z",
+  },
+] satisfies DeploymentRecord[];
