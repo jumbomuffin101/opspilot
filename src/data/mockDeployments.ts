@@ -1,10 +1,41 @@
 import type { DeploymentRecord } from "@/src/types/github";
 
-export const mockDeployments = [
+export const mockDeployments: DeploymentRecord[] = [
+  {
+    id: "dep_01K1C7CHECKOUT",
+    repository: { owner: "acme-commerce", name: "checkout-api" },
+    environment: "production",
+    version: "2.19.0",
+    status: "success",
+    sha: "c91a7e24b16f",
+    branch: "main",
+    author: "Release Automation",
+    summary: "Release checkout-api 2.19.0 with database client lifecycle changes",
+    deployedAt: "2026-07-03T14:01:00.000Z",
+    completedAt: "2026-07-03T14:05:00.000Z",
+    commits: [
+      {
+        sha: "c91a7e24b16f",
+        message: "refactor: centralize database pool initialization",
+        author: "Noah Williams",
+        risk: "high",
+        filesChanged: ["src/db/pool.ts", "config/production.ts"],
+      },
+      {
+        sha: "2fd81c047aa9",
+        message: "chore: update checkout runtime image",
+        author: "Release Automation",
+        risk: "low",
+        filesChanged: ["Dockerfile"],
+      },
+    ],
+    url: "https://github.com/acme-commerce/checkout-api/actions/runs/1907",
+  },
   {
     id: "dep_01JYP7A9Q2",
     repository: { owner: "acme-commerce", name: "checkout-api" },
     environment: "production",
+    version: "2.18.0",
     status: "rolled_back",
     sha: "8b6e5a91d242",
     branch: "main",
@@ -12,12 +43,22 @@ export const mockDeployments = [
     summary: "Release checkout-api 2.18.0 with connection-pool tuning",
     deployedAt: "2026-06-28T14:00:00.000Z",
     completedAt: "2026-06-28T14:03:00.000Z",
+    commits: [
+      {
+        sha: "8b6e5a91d242",
+        message: "perf: tune database connection pool defaults",
+        author: "Noah Williams",
+        risk: "high",
+        filesChanged: ["src/db/config.ts", "config/production.ts"],
+      },
+    ],
     url: "https://github.com/acme-commerce/checkout-api/actions/runs/1842",
   },
   {
     id: "dep_01JYP79CW8",
     repository: { owner: "acme-commerce", name: "checkout-api" },
     environment: "production",
+    version: "2.17.6",
     status: "success",
     sha: "f17d2b54c981",
     branch: "main",
@@ -25,11 +66,13 @@ export const mockDeployments = [
     summary: "Restore checkout-api 2.17.6",
     deployedAt: "2026-06-28T14:14:00.000Z",
     completedAt: "2026-06-28T14:18:00.000Z",
+    commits: [],
   },
   {
     id: "dep_01JYJ9DB41",
     repository: { owner: "acme-commerce", name: "fulfillment-events" },
     environment: "production-eu",
+    version: "4.7.2",
     status: "success",
     sha: "4c2aa135ef70",
     branch: "main",
@@ -37,5 +80,14 @@ export const mockDeployments = [
     summary: "Increase event consumer capacity in eu-west-1",
     deployedAt: "2026-06-24T09:31:00.000Z",
     completedAt: "2026-06-24T09:36:00.000Z",
+    commits: [
+      {
+        sha: "4c2aa135ef70",
+        message: "fix: raise EU fulfillment consumer floor",
+        author: "Priya Shah",
+        risk: "medium",
+        filesChanged: ["infra/consumers/eu-west-1.ts"],
+      },
+    ],
   },
-] satisfies DeploymentRecord[];
+];

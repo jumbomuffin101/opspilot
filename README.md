@@ -2,7 +2,7 @@
 
 OpsPilot is an AI incident commander designed to live inside Slack. It will bring incident context, deployment evidence, ownership, timelines, and recommended response actions into the channel where responders are already working.
 
-> Submission project for the **Slack Agent Builder Challenge**. Stage 2 implements a signed `/opspilot` slash command with deterministic mock investigation output. OpenAI and real-time search remain intentionally deferred.
+> Submission project for the **Slack Agent Builder Challenge**. Stage 3 provides rich, deterministic incident intelligence behind the signed `/opspilot` command. OpenAI, real-time Slack search, and the GitHub API remain intentionally deferred.
 
 ## Architecture
 
@@ -86,7 +86,30 @@ Example command:
 /opspilot investigate checkout API is failing after latest deploy
 ```
 
-OpsPilot acknowledges the command immediately, runs a deterministic mock investigation after the response, and posts the result through `chat.postMessage`. The Block Kit action buttons are presentation-only in Stage 2; no action handlers are implemented yet.
+OpsPilot acknowledges the command immediately, runs a deterministic mock investigation after the response, and posts the result through `chat.postMessage`. The Block Kit action buttons are presentation-only in Stage 3; no action handlers are implemented yet.
+
+## Demo intelligence
+
+The primary demo scenario is **checkout API returning HTTP 500 after deployment**. Keyword matching correlates the report with concise enterprise-style fixtures for:
+
+- Slack support and engineering signals
+- Production deployment timing
+- GitHub-style high-risk commit changes
+- Observability evidence
+- A similar resolved checkout incident
+- Service ownership and responder roles
+
+The resulting Slack message includes:
+
+1. Incident overview, status, severity, and confidence
+2. Customer and operational impact
+3. Evidence grouped by Slack history, deploy history, code changes, and observability
+4. Similar incidents and recent deployments
+5. Ranked likely root causes
+6. Practical recommended actions and suggested owners
+7. A drafted status update and next-update deadline
+
+Reports that do not match the checkout scenario receive a lower-confidence generic investigation with a safe triage checklist. Every result also includes a structured postmortem draft for the future action-handler stage.
 
 ## Deployment
 

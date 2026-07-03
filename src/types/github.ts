@@ -5,10 +5,19 @@ export interface GitHubRepository {
   name: string;
 }
 
+export interface GitHubCommitSignal {
+  sha: string;
+  message: string;
+  author: string;
+  risk: "low" | "medium" | "high";
+  filesChanged: string[];
+}
+
 export interface DeploymentRecord {
   id: string;
   repository: GitHubRepository;
   environment: string;
+  version: string;
   status: DeploymentStatus;
   sha: string;
   branch: string;
@@ -16,5 +25,6 @@ export interface DeploymentRecord {
   summary: string;
   deployedAt: string;
   completedAt?: string;
+  commits: GitHubCommitSignal[];
   url?: string;
 }
