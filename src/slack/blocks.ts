@@ -2,6 +2,7 @@ import {
   formatCompactTimestamp,
   formatConfidenceScore,
   formatSeverity,
+  encodeIncidentActionContext,
   toCompactBullets,
   truncateSlackText,
 } from "@/src/lib/utils";
@@ -11,6 +12,7 @@ import type {
   IncidentInvestigation,
 } from "@/src/types/incident";
 import type { KnownBlock } from "@/src/types/slack";
+import type { IncidentActionContext } from "@/src/types/slack";
 
 const EVIDENCE_LABELS: Record<IncidentEvidenceSource, string> = {
   slack_history: "Slack history",
@@ -72,7 +74,16 @@ export function investigationStartedBlocks(issueText: string, requesterId: strin
 
 export function investigationResultBlocks(
   investigation: IncidentInvestigation,
+  deliveryContext: Pick<IncidentActionContext, "channelId" | "requesterId">,
 ): KnownBlock[] {
+  const actionValue = encodeIncidentActionContext({
+    incidentId: investigation.id,
+    title: investigation.title,
+    service: investigation.service,
+    severity: investigation.severity,
+    channelId: deliveryContext.channelId,
+    requesterId: deliveryContext.requesterId,
+  });
   const evidence = (
     ["slack_history", "deploy_history", "code_change", "observability"] as const
   )
@@ -195,20 +206,20 @@ export function investigationResultBlocks(
           type: "button",
           text: { type: "plain_text", text: "Create Incident Channel", emoji: true },
           action_id: "create_incident_channel",
-          value: investigation.id,
+          value: actionValue,
           style: "primary",
         },
         {
           type: "button",
           text: { type: "plain_text", text: "Generate Postmortem", emoji: true },
           action_id: "generate_postmortem",
-          value: investigation.id,
+          value: actionValue,
         },
         {
           type: "button",
           text: { type: "plain_text", text: "Mark Resolved", emoji: true },
           action_id: "mark_resolved",
-          value: investigation.id,
+          value: actionValue,
           style: "danger",
         },
       ],
@@ -221,6 +232,186 @@ export function investigationResultBlocks(
           text: "Deterministic mock intelligence · Review evidence before taking action.",
         },
       ],
+    },
+  ];
+}
+
+export function incidentKickoffBlocks(
+  investigation: IncidentInvestigation,
+  context: IncidentActionContext,
+  actorUserId: string,
+): KnownBlock[] {
+  const requester = context.requesterId ? `<@${context.requesterId}>` : "Not provided";
+
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `${investigation.severity} Incident Kickoff` },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${escapeMrkdwn(investigation.title)}*\n*Incident:* ${investigation.id}\n*Service:* \`${investigation.service}\`\n*Status:* :large_yellow_circle: Investigating`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Current assessment*\n${escapeMrkdwn(investigation.summary)}\n\n*Impact*\n${escapeMrkdwn(investigation.impact)}`,
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `Channel created by <@${actorUserId}> · Original requester: ${requester}`,
+        },
+      ],
+    },
+  ];
+}
+
+export function incidentChecklistBlocks(investigation: IncidentInvestigation): KnownBlock[] {
+  const checklist = investigation.recommendedActions
+    .slice(0, 5)
+    .map((action) => `:white_large_square: ${escapeMrkdwn(action)}`)
+    .join("\n");
+
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: "Initial Response Checklist" },
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: checklist },
+    },
+    {
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: `Next update due ${formatCompactTimestamp(investigation.nextUpdateDue)}` },
+      ],
+    },
+  ];
+}
+
+export function incidentChannelCreatedBlocks(
+  investigation: IncidentInvestigation,
+  channelReference: string,
+  reused: boolean,
+): KnownBlock[] {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `:white_check_mark: ${reused ? "Reused" : "Created"} ${channelReference} for *${escapeMrkdwn(investigation.title)}*. The kickoff and response checklist are ready.`,
+      },
+    },
+  ];
+}
+
+export function postmortemDraftBlocks(investigation: IncidentInvestigation): KnownBlock[] {
+  const draft = investigation.postmortemDraft;
+  const timeline = draft.timeline
+    .slice(0, 6)
+    .map(
+      (event) =>
+        `• *${formatCompactTimestamp(event.timestamp)}* — ${escapeMrkdwn(event.event)} _(${escapeMrkdwn(event.author)})_`,
+    )
+    .join("\n");
+
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `Postmortem Draft · ${investigation.id}` },
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*Summary*\n${escapeMrkdwn(draft.summary)}` },
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*Impact*\n${escapeMrkdwn(draft.impact)}` },
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: truncateSlackText(`*Timeline*\n${timeline}`) },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Root Cause*\n${escapeMrkdwn(draft.rootCause)}\n\n*Resolution*\n${escapeMrkdwn(draft.resolution)}`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Follow-up Actions*\n${compactBullets(draft.followUps, 6)}`,
+      },
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: "Mock draft · Validate details before publishing." }],
+    },
+  ];
+}
+
+export function resolvedStatusBlocks(
+  investigation: IncidentInvestigation,
+  actorUserId: string,
+): KnownBlock[] {
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `Incident Resolved · ${investigation.id}` },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${escapeMrkdwn(investigation.title)}*\n*Final status:* :white_check_mark: Resolved\n*Service:* \`${investigation.service}\``,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Summary*\n${escapeMrkdwn(investigation.postmortemDraft.resolution)}`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*Follow-up reminder*\nConfirm customer metrics are stable, assign follow-up owners, and schedule a post-incident review.",
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `Marked resolved by <@${actorUserId}> · Generate and review the postmortem within two business days.`,
+        },
+      ],
+    },
+  ];
+}
+
+export function actionErrorBlocks(title: string, message: string): KnownBlock[] {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `:warning: *${escapeMrkdwn(title)}*\n${message}`,
+      },
     },
   ];
 }

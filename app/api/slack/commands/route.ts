@@ -40,12 +40,16 @@ function parsePayload(rawBody: string): SlackSlashCommandPayload | null {
   };
 }
 
-async function postInvestigation(channelId: string, issueText: string): Promise<void> {
+async function postInvestigation(
+  channelId: string,
+  issueText: string,
+  requesterId: string,
+): Promise<void> {
   let blocks: KnownBlock[];
 
   try {
     const investigation = await investigateIncident(issueText);
-    blocks = investigationResultBlocks(investigation);
+    blocks = investigationResultBlocks(investigation, { channelId, requesterId });
   } catch (error) {
     logger.error("Incident investigation failed", {
       channelId,
@@ -92,7 +96,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return slackResponse(usageBlocks());
   }
 
-  after(() => postInvestigation(payload.channelId, command.issueText));
+  after(() => postInvestigation(payload.channelId, command.issueText, payload.userId));
 
   return slackResponse(
     investigationStartedBlocks(command.issueText, payload.userId),

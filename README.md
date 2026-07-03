@@ -2,7 +2,7 @@
 
 OpsPilot is an AI incident commander designed to live inside Slack. It will bring incident context, deployment evidence, ownership, timelines, and recommended response actions into the channel where responders are already working.
 
-> Submission project for the **Slack Agent Builder Challenge**. Stage 3 provides rich, deterministic incident intelligence behind the signed `/opspilot` command. OpenAI, real-time Slack search, and the GitHub API remain intentionally deferred.
+> Submission project for the **Slack Agent Builder Challenge**. Stage 4 adds interactive incident-channel, postmortem, and resolution workflows to the deterministic `/opspilot` demo. OpenAI, real-time Slack search, and the GitHub API remain intentionally deferred.
 
 ## Architecture
 
@@ -67,7 +67,9 @@ npm run build
 1. Create or open the Slack app used for OpsPilot.
 2. Under **OAuth & Permissions**, add these bot token scopes:
    - `commands` — receive `/opspilot` invocations.
-   - `chat:write` — post the completed investigation to the channel.
+   - `chat:write` — post investigations and action results.
+   - `channels:manage` — create public incident channels and invite responders.
+   - `channels:read` — find and reuse an incident channel when its name already exists.
    - `chat:write.public` — optional, if OpsPilot must post in public channels it has not joined.
 3. Install or reinstall the app to the workspace after changing scopes.
 4. Under **Slash Commands**, create `/opspilot` and set its request URL to:
@@ -77,6 +79,11 @@ npm run build
    ```
 
 5. Copy the app's signing secret and bot token into `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN`.
+6. Under **Interactivity & Shortcuts**, enable interactivity and set the request URL to:
+
+   ```text
+   https://<your-domain>/api/slack/actions
+   ```
 
 For local development, expose the Next.js server through an HTTPS tunnel and use the tunnel URL for the request URL. Never commit real credentials.
 
@@ -86,7 +93,13 @@ Example command:
 /opspilot investigate checkout API is failing after latest deploy
 ```
 
-OpsPilot acknowledges the command immediately, runs a deterministic mock investigation after the response, and posts the result through `chat.postMessage`. The Block Kit action buttons are presentation-only in Stage 3; no action handlers are implemented yet.
+OpsPilot acknowledges the command immediately, runs a deterministic mock investigation after the response, and posts the result through `chat.postMessage`.
+
+The Stage 4 buttons run in deterministic mock mode:
+
+- **Create Incident Channel** creates or reuses a channel such as `inc-checkout-api-0703`, invites available responders, and posts kickoff and checklist messages.
+- **Generate Postmortem** posts the structured mock draft with impact, timeline, root cause, resolution, and follow-ups.
+- **Mark Resolved** posts a final status update and post-incident reminders.
 
 ## Demo intelligence
 
@@ -140,7 +153,6 @@ OpsPilot is being built for the Slack Agent Builder Challenge. The goal is a Sla
 
 ## Roadmap
 
-- Implement incident lifecycle action handlers for the prepared Block Kit buttons
 - Add idempotency and retry handling for Slack command deliveries
 - Implement grounded incident synthesis with OpenAI
 - Correlate GitHub deployments with operational signals
