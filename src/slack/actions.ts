@@ -1,4 +1,4 @@
-import { investigateIncident } from "@/src/agents/incidentAgent";
+import { investigateIncidentDeterministically } from "@/src/agents/incidentAgent";
 import { logger } from "@/src/lib/logger";
 import { buildIncidentChannelName } from "@/src/lib/utils";
 import {
@@ -51,7 +51,7 @@ function formatChannelError(error: unknown): string {
 export async function handleCreateIncidentChannel(
   payload: IncidentActionPayload,
 ): Promise<void> {
-  const investigation = await investigateIncident(investigationPrompt(payload));
+  const investigation = await investigateIncidentDeterministically(investigationPrompt(payload));
   const channelName = buildIncidentChannelName(
     payload.context.service,
     investigation.timeline[0]?.timestamp ?? investigation.nextUpdateDue,
@@ -134,7 +134,7 @@ export async function handleCreateIncidentChannel(
 }
 
 export async function handleGeneratePostmortem(payload: IncidentActionPayload): Promise<void> {
-  const investigation = await investigateIncident(investigationPrompt(payload));
+  const investigation = await investigateIncidentDeterministically(investigationPrompt(payload));
   await postMessage(
     payload.context.channelId,
     postmortemDraftBlocks(investigation),
@@ -143,7 +143,7 @@ export async function handleGeneratePostmortem(payload: IncidentActionPayload): 
 }
 
 export async function handleMarkResolved(payload: IncidentActionPayload): Promise<void> {
-  const investigation = await investigateIncident(investigationPrompt(payload));
+  const investigation = await investigateIncidentDeterministically(investigationPrompt(payload));
   await postMessage(
     payload.context.channelId,
     resolvedStatusBlocks(investigation, payload.actorUserId),

@@ -2,7 +2,7 @@
 
 OpsPilot is an AI incident commander designed to live inside Slack. It will bring incident context, deployment evidence, ownership, timelines, and recommended response actions into the channel where responders are already working.
 
-> Submission project for the **Slack Agent Builder Challenge**. Stage 5 routes deterministic incident intelligence through a registry-driven agent tool architecture. OpenAI, MCP, real-time Slack search, and the GitHub API remain intentionally deferred.
+> Submission project for the **Slack Agent Builder Challenge**. Stage 6 adds optional OpenAI structured reasoning with strict validation and deterministic fallback. MCP, real-time Slack search, and the GitHub API remain intentionally deferred.
 
 ## Architecture
 
@@ -12,7 +12,10 @@ OpsPilot uses a modular TypeScript architecture so Slack transport, agent orches
 Slack interface
       |
       v
-Slack handlers ---> Incident agent ---> Deterministic reasoning
+Slack handlers ---> Incident agent ---> AI reasoning (optional)
+                         |                       |
+                         |                       v
+                         +--------------> Deterministic fallback
                          |
                          v
                 Evidence aggregator
@@ -98,7 +101,7 @@ Example command:
 /opspilot investigate checkout API is failing after latest deploy
 ```
 
-OpsPilot acknowledges the command immediately, runs a deterministic mock investigation after the response, and posts the result through `chat.postMessage`.
+OpsPilot acknowledges the command immediately, aggregates evidence after the response, applies AI or deterministic reasoning, and posts the result through `chat.postMessage`.
 
 The Stage 4 buttons run in deterministic mock mode:
 
@@ -124,11 +127,24 @@ Tools have no knowledge of each other, Slack Block Kit, or deterministic reasoni
 
 `EvidenceAggregator` runs every registered tool concurrently, records execution duration and success or failure, and returns one typed `InvestigationEvidence` object. A failed tool contributes a failure record while successful evidence remains available, so an investigation can continue with partial context.
 
-The incident agent receives only the aggregate and applies the existing deterministic checkout or generic reasoning. Slash-command responses, interactive actions, and Block Kit rendering remain separate from this layer.
+The incident agent receives only the aggregate. It can request a schema-constrained OpenAI investigation or apply the existing deterministic checkout or generic reasoning. Slash-command responses, interactive actions, and Block Kit rendering remain separate from this layer.
 
 ### Future MCP compatibility
 
 The tool boundary is intentionally transport-neutral. A future MCP tool, Slack Real-Time Search adapter, GitHub API adapter, or deployment-provider adapter can implement `IncidentTool<Result>` and register with `ToolRegistry` without changing the incident agent or Slack UX. No MCP or external intelligence integration is implemented in this stage.
+
+### AI reasoning and fallback
+
+When `DEMO_MODE=false` and `OPENAI_API_KEY` is configured, OpsPilot sends the issue and aggregated tool evidence to the OpenAI Responses API. The model is constrained by a strict JSON Schema, and OpsPilot independently validates every required `IncidentInvestigation` field before accepting the result.
+
+Fallback behavior is automatic:
+
+- `DEMO_MODE=true` skips OpenAI and always uses deterministic reasoning.
+- A missing API key uses deterministic reasoning.
+- API errors, timeouts, invalid JSON, or failed validation use deterministic reasoning.
+- Interactive button actions continue using deterministic incident and postmortem data.
+
+For judging and live demos, use `DEMO_MODE=true` for maximum reliability. Set `DEMO_MODE=false` only when demonstrating AI reasoning with a configured API key.
 
 ## Demo intelligence
 
@@ -170,7 +186,9 @@ Runtime service clients should remain lazily initialized so missing build-time s
 | `SLACK_BOT_TOKEN` | Slack bot authentication |
 | `SLACK_SIGNING_SECRET` | Slack request verification |
 | `SLACK_APP_TOKEN` | Slack Socket Mode authentication |
-| `OPENAI_API_KEY` | Future model access |
+| `OPENAI_API_KEY` | Optional OpenAI API authentication; never exposed to the browser |
+| `OPENAI_MODEL` | Optional model override; defaults to `gpt-4o-mini` |
+| `DEMO_MODE` | Set `true` to force deterministic reasoning; recommended for demos |
 | `GITHUB_TOKEN` | GitHub API authentication |
 | `GITHUB_OWNER` | Deployment repository owner |
 | `GITHUB_REPO` | Deployment repository name |
@@ -183,7 +201,7 @@ OpsPilot is being built for the Slack Agent Builder Challenge. The goal is a Sla
 ## Roadmap
 
 - Add idempotency and retry handling for Slack command deliveries
-- Implement grounded incident synthesis with OpenAI
+- Add evaluations for AI and deterministic investigation parity
 - Correlate GitHub deployments with operational signals
 - Add Slack search with scoped evidence and citations
 - Persist incidents, audit events, and post-incident reports

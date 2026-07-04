@@ -7,6 +7,8 @@ export const ENVIRONMENT_KEYS = {
   slackSigningSecret: "SLACK_SIGNING_SECRET",
   slackAppToken: "SLACK_APP_TOKEN",
   openAiApiKey: "OPENAI_API_KEY",
+  openAiModel: "OPENAI_MODEL",
+  demoMode: "DEMO_MODE",
   githubToken: "GITHUB_TOKEN",
   githubOwner: "GITHUB_OWNER",
   githubRepo: "GITHUB_REPO",

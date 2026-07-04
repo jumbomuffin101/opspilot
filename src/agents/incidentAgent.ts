@@ -1,6 +1,9 @@
 import { EvidenceAggregator } from "@/src/agents/evidenceAggregator";
-import { APP_DESCRIPTION, APP_NAME } from "@/src/lib/constants";
+import { APP_DESCRIPTION, APP_NAME, ENVIRONMENT_KEYS } from "@/src/lib/constants";
+import { logger } from "@/src/lib/logger";
+import { generateIncidentInvestigationWithAI } from "@/src/services/openai";
 import { createDefaultToolRegistry } from "@/src/tools";
+import type { InvestigationQuery } from "@/src/tools";
 import type {
   IncidentEvidence,
   IncidentInvestigation,
@@ -17,7 +20,7 @@ export const incidentAgent = {
     "deployment correlation",
     "response coordination",
   ],
-  mode: "deterministic-tool-orchestration",
+  mode: "ai-with-deterministic-fallback",
 } as const;
 
 const evidenceAggregator = new EvidenceAggregator(createDefaultToolRegistry());
@@ -284,16 +287,54 @@ function buildGenericInvestigation(
   };
 }
 
-/** Aggregates tool evidence, then applies deterministic reasoning without model calls. */
-export async function investigateIncident(issueText: string): Promise<IncidentInvestigation> {
+function buildInvestigationQuery(issueText: string): InvestigationQuery {
   const checkoutScenario = isCheckoutApiScenario(issueText);
-  const evidence = await evidenceAggregator.collect({
+
+  return {
     issue: issueText,
     service: checkoutScenario ? "checkout-api" : "unknown-service",
     severity: checkoutScenario ? "SEV-1" : "SEV-3",
-  });
+  };
+}
 
-  return checkoutScenario
+function buildDeterministicInvestigation(
+  issueText: string,
+  evidence: InvestigationEvidence,
+): IncidentInvestigation {
+  return isCheckoutApiScenario(issueText)
     ? buildCheckoutInvestigation(evidence)
     : buildGenericInvestigation(issueText, evidence);
+}
+
+export async function investigateIncidentDeterministically(
+  issueText: string,
+): Promise<IncidentInvestigation> {
+  const evidence = await evidenceAggregator.collect(buildInvestigationQuery(issueText));
+  return buildDeterministicInvestigation(issueText, evidence);
+}
+
+/** Aggregates evidence, attempts AI reasoning, and always retains deterministic fallback. */
+export async function investigateIncident(issueText: string): Promise<IncidentInvestigation> {
+  const evidence = await evidenceAggregator.collect(buildInvestigationQuery(issueText));
+  const demoMode =
+    process.env[ENVIRONMENT_KEYS.demoMode]?.trim().toLowerCase() === "true";
+
+  if (demoMode) {
+    logger.info("Incident investigation completed", {
+      source: "deterministic",
+      reason: "demo_mode",
+    });
+    return buildDeterministicInvestigation(issueText, evidence);
+  }
+
+  const aiInvestigation = await generateIncidentInvestigationWithAI({ issueText, evidence });
+  if (aiInvestigation) {
+    logger.info("Incident investigation completed", { source: "ai" });
+    return aiInvestigation;
+  }
+
+  logger.info("Incident investigation completed", {
+    source: "deterministic_fallback",
+  });
+  return buildDeterministicInvestigation(issueText, evidence);
 }
