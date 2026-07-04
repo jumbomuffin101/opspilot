@@ -2,7 +2,7 @@
 
 OpsPilot is an AI incident commander designed to live inside Slack. It will bring incident context, deployment evidence, ownership, timelines, and recommended response actions into the channel where responders are already working.
 
-> Submission project for the **Slack Agent Builder Challenge**. Stage 4 adds interactive incident-channel, postmortem, and resolution workflows to the deterministic `/opspilot` demo. OpenAI, real-time Slack search, and the GitHub API remain intentionally deferred.
+> Submission project for the **Slack Agent Builder Challenge**. Stage 5 routes deterministic incident intelligence through a registry-driven agent tool architecture. OpenAI, MCP, real-time Slack search, and the GitHub API remain intentionally deferred.
 
 ## Architecture
 
@@ -12,12 +12,17 @@ OpsPilot uses a modular TypeScript architecture so Slack transport, agent orches
 Slack interface
       |
       v
-Slack handlers ---> Incident agent ---> Domain tools
-                         |                  |
-                         v                  v
-                  Service adapters   Incident/deployment data
-                  (OpenAI, GitHub,
-                   Slack search)
+Slack handlers ---> Incident agent ---> Deterministic reasoning
+                         |
+                         v
+                Evidence aggregator
+                         |
+                         v
+                    Tool registry
+                         |
+          +--------------+---------------+
+          v              v               v
+    Slack history   Deploys/commits   History/ownership
 ```
 
 The public Next.js page is a product landing page only. Slack remains the primary product interface.
@@ -33,7 +38,7 @@ src/
   lib/                  Constants, logging, and shared utilities
   services/             External service configuration and adapters
   slack/                Blocks, commands, actions, and middleware
-  tools/                Incident and deployment tool contracts
+  tools/                Registry and single-responsibility evidence tools
   types/                Shared domain and integration types
 ```
 
@@ -100,6 +105,30 @@ The Stage 4 buttons run in deterministic mock mode:
 - **Create Incident Channel** creates or reuses a channel such as `inc-checkout-api-0703`, invites available responders, and posts kickoff and checklist messages.
 - **Generate Postmortem** posts the structured mock draft with impact, timeline, root cause, resolution, and follow-ups.
 - **Mark Resolved** posts a final status update and post-incident reminders.
+
+## Agent architecture
+
+### Tool system
+
+Every evidence source implements the same `IncidentTool<Result>` contract and receives an `InvestigationQuery`. The default registry contains five independent tools:
+
+- `SlackSearchTool` returns matching historical Slack messages.
+- `GitHubTool` returns commit-level code-change signals.
+- `DeploymentTool` returns deployment events.
+- `IncidentHistoryTool` returns relevant prior incidents.
+- `OwnershipTool` returns service teams and responders.
+
+Tools have no knowledge of each other, Slack Block Kit, or deterministic reasoning. Their current implementations read local fixtures; replacing one with a real integration only requires changing that tool's `execute()` implementation.
+
+### Evidence aggregation
+
+`EvidenceAggregator` runs every registered tool concurrently, records execution duration and success or failure, and returns one typed `InvestigationEvidence` object. A failed tool contributes a failure record while successful evidence remains available, so an investigation can continue with partial context.
+
+The incident agent receives only the aggregate and applies the existing deterministic checkout or generic reasoning. Slash-command responses, interactive actions, and Block Kit rendering remain separate from this layer.
+
+### Future MCP compatibility
+
+The tool boundary is intentionally transport-neutral. A future MCP tool, Slack Real-Time Search adapter, GitHub API adapter, or deployment-provider adapter can implement `IncidentTool<Result>` and register with `ToolRegistry` without changing the incident agent or Slack UX. No MCP or external intelligence integration is implemented in this stage.
 
 ## Demo intelligence
 

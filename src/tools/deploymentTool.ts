@@ -1,15 +1,28 @@
 import { mockDeployments } from "@/src/data/mockDeployments";
-import type { DeploymentRecord } from "@/src/types/github";
+import type { IncidentTool, InvestigationQuery } from "@/src/tools/base";
+import type { DeploymentToolResult } from "@/src/types/tools";
 
-export interface DeploymentToolInput {
-  service?: string;
-  environment?: string;
-}
+export class DeploymentTool implements IncidentTool<DeploymentToolResult> {
+  readonly name = "deployments";
 
-export function listMockDeployments(input: DeploymentToolInput = {}): DeploymentRecord[] {
-  return mockDeployments.filter((deployment) => {
-    const matchesService = !input.service || deployment.repository.name === input.service;
-    const matchesEnvironment = !input.environment || deployment.environment === input.environment;
-    return matchesService && matchesEnvironment;
-  });
+  async execute(query: InvestigationQuery): Promise<DeploymentToolResult> {
+    const deployments = mockDeployments
+      .filter(
+        (deployment) => !query.service || deployment.repository.name === query.service,
+      )
+      .map((deployment) => ({
+        id: deployment.id,
+        service: deployment.repository.name,
+        environment: deployment.environment,
+        version: deployment.version,
+        status: deployment.status,
+        sha: deployment.sha,
+        summary: deployment.summary,
+        deployedAt: deployment.deployedAt,
+        completedAt: deployment.completedAt,
+        url: deployment.url,
+      }));
+
+    return { kind: "deployments", deployments };
+  }
 }

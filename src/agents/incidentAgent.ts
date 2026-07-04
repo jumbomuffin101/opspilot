@@ -1,16 +1,13 @@
-import { mockDeployments } from "@/src/data/mockDeployments";
-import {
-  mockIncidents,
-  mockServiceOwnership,
-  mockSlackIncidentMessages,
-} from "@/src/data/mockIncidents";
+import { EvidenceAggregator } from "@/src/agents/evidenceAggregator";
 import { APP_DESCRIPTION, APP_NAME } from "@/src/lib/constants";
-import type { DeploymentRecord } from "@/src/types/github";
+import { createDefaultToolRegistry } from "@/src/tools";
 import type {
   IncidentEvidence,
   IncidentInvestigation,
+  IncidentOwner,
   RecentDeployment,
 } from "@/src/types/incident";
+import type { InvestigationEvidence } from "@/src/types/tools";
 
 export const incidentAgent = {
   name: APP_NAME,
@@ -20,8 +17,10 @@ export const incidentAgent = {
     "deployment correlation",
     "response coordination",
   ],
-  mode: "deterministic-mock",
+  mode: "deterministic-tool-orchestration",
 } as const;
+
+const evidenceAggregator = new EvidenceAggregator(createDefaultToolRegistry());
 
 const CHECKOUT_SCENARIO_SIGNALS = [
   /\bcheckout(?:-api)?\b/i,
@@ -35,12 +34,19 @@ export function isCheckoutApiScenario(issueText: string): boolean {
   return /\bcheckout(?:-api)?\b/i.test(issueText) || matchingSignals.length >= 3;
 }
 
-function toRecentDeployment(
-  deployment: DeploymentRecord,
-): RecentDeployment {
-  return {
+function toOwners(evidence: InvestigationEvidence): IncidentOwner[] {
+  return evidence.owners.map((owner) => ({
+    name: owner.name,
+    role: owner.role,
+    team: owner.team,
+    slackUserId: owner.slackUserId,
+  }));
+}
+
+function toRecentDeployments(evidence: InvestigationEvidence): RecentDeployment[] {
+  return evidence.deployments.slice(0, 2).map((deployment) => ({
     id: deployment.id,
-    service: deployment.repository.name,
+    service: deployment.service,
     environment: deployment.environment,
     version: deployment.version,
     status: deployment.status,
@@ -48,34 +54,37 @@ function toRecentDeployment(
     summary: deployment.summary,
     deployedAt: deployment.deployedAt,
     completedAt: deployment.completedAt,
-    commitSignals: deployment.commits,
     url: deployment.url,
-  };
+    commitSignals: evidence.commits
+      .filter((commit) => commit.deploymentId === deployment.id)
+      .map((commit) => ({
+        sha: commit.sha,
+        message: commit.message,
+        author: commit.author,
+        risk: commit.risk,
+        filesChanged: [...commit.filesChanged],
+      })),
+  }));
 }
 
-function buildCheckoutEvidence(): IncidentEvidence[] {
-  const recentDeployment = mockDeployments.find(
-    (deployment) =>
-      deployment.repository.name === "checkout-api" && deployment.version === "2.19.0",
-  );
-
-  const slackEvidence: IncidentEvidence[] = mockSlackIncidentMessages.map((message) => ({
+function buildCheckoutEvidence(evidence: InvestigationEvidence): IncidentEvidence[] {
+  const recentDeployment = evidence.deployments[0];
+  const slackEvidence: IncidentEvidence[] = evidence.slackHistory.map((message) => ({
     source: "slack_history",
     signal: message.channel,
     detail: `${message.author}: ${message.text}`,
     capturedAt: message.timestamp,
     url: message.permalink,
   }));
-
-  if (!recentDeployment) return slackEvidence;
-
-  const codeEvidence: IncidentEvidence[] = recentDeployment.commits.map((commit) => ({
-    source: "code_change",
-    signal: `${commit.risk}-risk commit ${commit.sha.slice(0, 7)}`,
-    detail: `${commit.message}; changed ${commit.filesChanged.join(", ")}.`,
-    capturedAt: recentDeployment.deployedAt,
-    url: recentDeployment.url,
-  }));
+  const codeEvidence: IncidentEvidence[] = evidence.commits
+    .filter((commit) => !recentDeployment || commit.deploymentId === recentDeployment.id)
+    .map((commit) => ({
+      source: "code_change",
+      signal: `${commit.risk}-risk commit ${commit.sha.slice(0, 7)}`,
+      detail: `${commit.message}; changed ${commit.filesChanged.join(", ")}.`,
+      capturedAt: commit.committedAt,
+      url: commit.url,
+    }));
 
   return [
     ...slackEvidence,
@@ -85,31 +94,30 @@ function buildCheckoutEvidence(): IncidentEvidence[] {
       detail: "Error rate rose from 0.1% to 31.8% within five minutes of the production rollout.",
       capturedAt: "2026-07-03T14:09:00.000Z",
     },
-    {
-      source: "deploy_history",
-      signal: "Five-minute deployment correlation",
-      detail: "checkout-api 2.19.0 completed at 14:05 UTC; the first customer-impact signal arrived at 14:08 UTC.",
-      capturedAt: recentDeployment.completedAt ?? recentDeployment.deployedAt,
-      url: recentDeployment.url,
-    },
+    ...(recentDeployment
+      ? [
+          {
+            source: "deploy_history" as const,
+            signal: "Five-minute deployment correlation",
+            detail: `${recentDeployment.service} ${recentDeployment.version} completed at 14:05 UTC; the first customer-impact signal arrived at 14:08 UTC.`,
+            capturedAt: recentDeployment.completedAt ?? recentDeployment.deployedAt,
+            url: recentDeployment.url,
+          },
+        ]
+      : []),
     ...codeEvidence,
   ];
 }
 
-function buildCheckoutInvestigation(): IncidentInvestigation {
-  const priorCheckoutIncident = mockIncidents.find(
-    (incident) => incident.service === "checkout-api",
-  );
-  const ownership = mockServiceOwnership.find((item) => item.service === "checkout-api");
-  const recentDeployments = mockDeployments
-    .filter((deployment) => deployment.repository.name === "checkout-api")
-    .slice(0, 2)
-    .map(toRecentDeployment);
+function confidenceWithPartialEvidence(
+  baseline: number,
+  evidence: InvestigationEvidence,
+): number {
+  return Math.max(0.2, baseline - evidence.toolFailures.length * 0.05);
+}
 
-  if (!priorCheckoutIncident || !ownership || recentDeployments.length === 0) {
-    throw new Error("Checkout investigation fixtures are unavailable.");
-  }
-
+function buildCheckoutInvestigation(evidence: InvestigationEvidence): IncidentInvestigation {
+  const priorCheckoutIncident = evidence.previousIncidents[0];
   const timeline = [
     {
       timestamp: "2026-07-03T14:05:00.000Z",
@@ -153,24 +161,26 @@ function buildCheckoutInvestigation(): IncidentInvestigation {
       "A production-only pool configuration override is incompatible with the new initialization path.",
       "The runtime image update changed connection or DNS behavior for the database client.",
     ],
-    evidence: buildCheckoutEvidence(),
-    similarIncidents: [
-      {
-        id: priorCheckoutIncident.id,
-        title: priorCheckoutIncident.title,
-        severity: priorCheckoutIncident.severity,
-        occurredAt: "2026-06-28T14:07:00.000Z",
-        resolution: priorCheckoutIncident.resolution,
-      },
-    ],
-    recentDeployments,
+    evidence: buildCheckoutEvidence(evidence),
+    similarIncidents: priorCheckoutIncident
+      ? [
+          {
+            id: priorCheckoutIncident.id,
+            title: priorCheckoutIncident.title,
+            severity: priorCheckoutIncident.severity,
+            occurredAt: priorCheckoutIncident.occurredAt,
+            resolution: priorCheckoutIncident.resolution,
+          },
+        ]
+      : [],
+    recentDeployments: toRecentDeployments(evidence),
     recommendedActions: [
       "Pause checkout-api rollouts and compare 2.19.0 against the last known-good production configuration.",
       "Inspect db_pool_acquire_timeout volume, active connections, and pool saturation by region.",
       "Roll back 2.19.0 if synthetic checkout failures continue for five minutes.",
       "Run card and wallet synthetic checkouts in US and EU before moving to monitoring.",
     ],
-    suggestedOwners: ownership.owners,
+    suggestedOwners: toOwners(evidence),
     timeline,
     statusUpdate:
       "SEV-1 investigating: checkout HTTP 500s began minutes after the 2.19.0 rollout. The leading hypothesis is a database pool initialization regression. Rollout is being paused while responders validate connection saturation and prepare rollback.",
@@ -187,7 +197,7 @@ function buildCheckoutInvestigation(): IncidentInvestigation {
         "Alert on pool acquisition timeouts before customer-facing HTTP errors breach threshold.",
       ],
     },
-    confidenceScore: 0.91,
+    confidenceScore: confidenceWithPartialEvidence(0.91, evidence),
     customerImpact: {
       description: "Customers receive an error after payment confirmation and cannot place orders.",
       affectedRegions: ["us-east-1", "eu-west-1"],
@@ -198,10 +208,10 @@ function buildCheckoutInvestigation(): IncidentInvestigation {
   };
 }
 
-function buildGenericInvestigation(issueText: string): IncidentInvestigation {
-  const ownership = mockServiceOwnership.find((item) => item.service === "unknown-service");
-  if (!ownership) throw new Error("Generic service ownership fixture is unavailable.");
-
+function buildGenericInvestigation(
+  issueText: string,
+  evidence: InvestigationEvidence,
+): IncidentInvestigation {
   const timeline = [
     {
       timestamp: "2026-07-03T14:12:00.000Z",
@@ -242,14 +252,14 @@ function buildGenericInvestigation(issueText: string): IncidentInvestigation {
       },
     ],
     similarIncidents: [],
-    recentDeployments: [],
+    recentDeployments: toRecentDeployments(evidence),
     recommendedActions: [
       "Confirm the affected service, environment, region, and customer journey.",
       "Check error rate, latency, saturation, and dependency health for the suspected service.",
       "Review deployments and configuration changes from the previous 60 minutes.",
       "Assign a service owner and define the next update time before making changes.",
     ],
-    suggestedOwners: ownership.owners,
+    suggestedOwners: toOwners(evidence),
     timeline,
     statusUpdate:
       "SEV-3 investigating: impact and affected service are not yet confirmed. Platform Operations is validating telemetry, recent changes, and dependency health before selecting containment.",
@@ -264,7 +274,7 @@ function buildGenericInvestigation(issueText: string): IncidentInvestigation {
         "Capture the first confirmed causal signal and containment decision.",
       ],
     },
-    confidenceScore: 0.42,
+    confidenceScore: confidenceWithPartialEvidence(0.42, evidence),
     customerImpact: {
       description: "Unknown; validation is in progress.",
       affectedRegions: [],
@@ -274,9 +284,16 @@ function buildGenericInvestigation(issueText: string): IncidentInvestigation {
   };
 }
 
-/** Returns deterministic mock intelligence without model, search, or GitHub API calls. */
+/** Aggregates tool evidence, then applies deterministic reasoning without model calls. */
 export async function investigateIncident(issueText: string): Promise<IncidentInvestigation> {
-  return isCheckoutApiScenario(issueText)
-    ? buildCheckoutInvestigation()
-    : buildGenericInvestigation(issueText);
+  const checkoutScenario = isCheckoutApiScenario(issueText);
+  const evidence = await evidenceAggregator.collect({
+    issue: issueText,
+    service: checkoutScenario ? "checkout-api" : "unknown-service",
+    severity: checkoutScenario ? "SEV-1" : "SEV-3",
+  });
+
+  return checkoutScenario
+    ? buildCheckoutInvestigation(evidence)
+    : buildGenericInvestigation(issueText, evidence);
 }
