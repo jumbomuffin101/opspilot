@@ -22,6 +22,8 @@ export interface CommitSignal {
   filesChanged: string[];
   committedAt: string;
   url?: string;
+  relevanceScore: number;
+  matchedTerms: string[];
 }
 
 export interface GitHubToolResult {

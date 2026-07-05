@@ -47,27 +47,37 @@ function toOwners(evidence: InvestigationEvidence): IncidentOwner[] {
 }
 
 function toRecentDeployments(evidence: InvestigationEvidence): RecentDeployment[] {
-  return evidence.deployments.slice(0, 2).map((deployment) => ({
-    id: deployment.id,
-    service: deployment.service,
-    environment: deployment.environment,
-    version: deployment.version,
-    status: deployment.status,
-    sha: deployment.sha,
-    summary: deployment.summary,
-    deployedAt: deployment.deployedAt,
-    completedAt: deployment.completedAt,
-    url: deployment.url,
-    commitSignals: evidence.commits
-      .filter((commit) => commit.deploymentId === deployment.id)
-      .map((commit) => ({
+  return evidence.deployments.slice(0, 2).map((deployment, index) => {
+    const deploymentCommits = evidence.commits.filter(
+      (commit) => commit.deploymentId === deployment.id,
+    );
+    const relatedCommits =
+      deploymentCommits.length > 0
+        ? deploymentCommits
+        : index === 0
+          ? evidence.commits.slice(0, 3)
+          : [];
+
+    return {
+      id: deployment.id,
+      service: deployment.service,
+      environment: deployment.environment,
+      version: deployment.version,
+      status: deployment.status,
+      sha: deployment.sha,
+      summary: deployment.summary,
+      deployedAt: deployment.deployedAt,
+      completedAt: deployment.completedAt,
+      url: deployment.url,
+      commitSignals: relatedCommits.map((commit) => ({
         sha: commit.sha,
         message: commit.message,
         author: commit.author,
         risk: commit.risk,
         filesChanged: [...commit.filesChanged],
       })),
-  }));
+    };
+  });
 }
 
 function buildCheckoutEvidence(evidence: InvestigationEvidence): IncidentEvidence[] {
@@ -79,8 +89,12 @@ function buildCheckoutEvidence(evidence: InvestigationEvidence): IncidentEvidenc
     capturedAt: message.timestamp,
     url: message.permalink,
   }));
-  const codeEvidence: IncidentEvidence[] = evidence.commits
-    .filter((commit) => !recentDeployment || commit.deploymentId === recentDeployment.id)
+  const deploymentCommits = evidence.commits.filter(
+    (commit) => !recentDeployment || commit.deploymentId === recentDeployment.id,
+  );
+  const relatedCommits =
+    deploymentCommits.length > 0 ? deploymentCommits : evidence.commits.slice(0, 3);
+  const codeEvidence: IncidentEvidence[] = relatedCommits
     .map((commit) => ({
       source: "code_change",
       signal: `${commit.risk}-risk commit ${commit.sha.slice(0, 7)}`,

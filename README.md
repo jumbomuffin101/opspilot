@@ -2,7 +2,7 @@
 
 OpsPilot is an AI incident commander designed to live inside Slack. It will bring incident context, deployment evidence, ownership, timelines, and recommended response actions into the channel where responders are already working.
 
-> Submission project for the **Slack Agent Builder Challenge**. Stage 6 adds optional OpenAI structured reasoning with strict validation and deterministic fallback. MCP, real-time Slack search, and the GitHub API remain intentionally deferred.
+> Submission project for the **Slack Agent Builder Challenge**. Stage 7 adds real GitHub commit evidence with relevance ranking and mock fallback. MCP, real-time Slack search, and deployment-provider APIs remain intentionally deferred.
 
 ## Architecture
 
@@ -116,12 +116,12 @@ The Stage 4 buttons run in deterministic mock mode:
 Every evidence source implements the same `IncidentTool<Result>` contract and receives an `InvestigationQuery`. The default registry contains five independent tools:
 
 - `SlackSearchTool` returns matching historical Slack messages.
-- `GitHubTool` returns commit-level code-change signals.
+- `GitHubTool` returns ranked commit-level code-change signals from GitHub or mock fallback.
 - `DeploymentTool` returns deployment events.
 - `IncidentHistoryTool` returns relevant prior incidents.
 - `OwnershipTool` returns service teams and responders.
 
-Tools have no knowledge of each other, Slack Block Kit, or deterministic reasoning. Their current implementations read local fixtures; replacing one with a real integration only requires changing that tool's `execute()` implementation.
+Tools have no knowledge of each other, Slack Block Kit, or deterministic reasoning. Each tool owns its integration and fallback behavior, so evidence providers can change without altering the agent.
 
 ### Evidence aggregation
 
@@ -131,7 +131,7 @@ The incident agent receives only the aggregate. It can request a schema-constrai
 
 ### Future MCP compatibility
 
-The tool boundary is intentionally transport-neutral. A future MCP tool, Slack Real-Time Search adapter, GitHub API adapter, or deployment-provider adapter can implement `IncidentTool<Result>` and register with `ToolRegistry` without changing the incident agent or Slack UX. No MCP or external intelligence integration is implemented in this stage.
+The tool boundary is intentionally transport-neutral. A future MCP tool, Slack Real-Time Search adapter, or deployment-provider adapter can implement `IncidentTool<Result>` and register with `ToolRegistry` without changing the incident agent or Slack UX. No MCP, Slack Real-Time Search, or deployment-provider integration is implemented in this stage.
 
 ### AI reasoning and fallback
 
@@ -152,7 +152,7 @@ The primary demo scenario is **checkout API returning HTTP 500 after deployment*
 
 - Slack support and engineering signals
 - Production deployment timing
-- GitHub-style high-risk commit changes
+- GitHub commit changes, using the configured repository when available
 - Observability evidence
 - A similar resolved checkout incident
 - Service ownership and responder roles
@@ -168,6 +168,26 @@ The resulting Slack message includes:
 7. A drafted status update and next-update deadline
 
 Reports that do not match the checkout scenario receive a lower-confidence generic investigation with a safe triage checklist. Every result also includes a structured postmortem draft for the future action-handler stage.
+
+## GitHub integration
+
+When `DEMO_MODE=false` and all GitHub variables are configured, `GitHubTool` requests the latest 10 commits from `GITHUB_OWNER/GITHUB_REPO`. It enriches the newest three commits with changed file paths, calculates relevance from the issue, service, commit message, and files, then returns the most relevant evidence first.
+
+Configuration:
+
+1. Create a fine-grained personal access token or GitHub App token with **Contents: read** permission for the target repository. A classic token requires repository read access (`repo` for private repositories).
+2. Set `GITHUB_TOKEN` to the token.
+3. Set `GITHUB_OWNER` to the account or organization name.
+4. Set `GITHUB_REPO` to the repository name without `.git`.
+5. Set `DEMO_MODE=false` to enable live GitHub requests.
+
+`DEMO_MODE=true` always uses mock GitHub evidence. Missing credentials, malformed responses, timeouts, permission failures, and rate limits also fall back automatically. If one of the optional commit-detail requests fails, OpsPilot retains the basic commit data.
+
+Troubleshooting:
+
+- `404` for a private repository usually means the token cannot access that repository or the owner/repository values are incorrect.
+- `403` or `429` may indicate rate limiting; wait for the reset window instead of repeatedly retrying.
+- Confirm **Contents: read** permission and reinstall or reauthorize the token after changing access.
 
 ## Deployment
 
@@ -189,9 +209,9 @@ Runtime service clients should remain lazily initialized so missing build-time s
 | `OPENAI_API_KEY` | Optional OpenAI API authentication; never exposed to the browser |
 | `OPENAI_MODEL` | Optional model override; defaults to `gpt-4o-mini` |
 | `DEMO_MODE` | Set `true` to force deterministic reasoning; recommended for demos |
-| `GITHUB_TOKEN` | GitHub API authentication |
-| `GITHUB_OWNER` | Deployment repository owner |
-| `GITHUB_REPO` | Deployment repository name |
+| `GITHUB_TOKEN` | Optional GitHub token with repository Contents read access |
+| `GITHUB_OWNER` | GitHub account or organization containing the evidence repository |
+| `GITHUB_REPO` | GitHub evidence repository name without `.git` |
 | `NEXT_PUBLIC_APP_URL` | Public deployment URL |
 
 ## Hackathon
@@ -202,7 +222,7 @@ OpsPilot is being built for the Slack Agent Builder Challenge. The goal is a Sla
 
 - Add idempotency and retry handling for Slack command deliveries
 - Add evaluations for AI and deterministic investigation parity
-- Correlate GitHub deployments with operational signals
+- Replace mock deployment evidence with a cloud deployment-provider adapter
 - Add Slack search with scoped evidence and citations
 - Persist incidents, audit events, and post-incident reports
 - Add observability, evaluation, access control, and production hardening
