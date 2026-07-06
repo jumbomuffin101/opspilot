@@ -6,8 +6,9 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "OpsPilot | AI Incident Commander for Slack",
-  description: "Coordinate incidents, connect operational evidence, and guide response from Slack.",
+  title: "OpsPilot | AI Incident Response, Native to Slack",
+  description:
+    "Investigate outages, coordinate responders, analyze deployments, and generate postmortems without leaving Slack.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

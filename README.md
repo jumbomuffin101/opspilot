@@ -155,6 +155,7 @@ npm run build
 | `GITHUB_OWNER` | GitHub only | Repository account or organization |
 | `GITHUB_REPO` | GitHub only | Repository name without `.git` |
 | `NEXT_PUBLIC_APP_URL` | Deployment | Public application URL |
+| `NEXT_PUBLIC_SLACK_INSTALL_URL` | No | Public Slack OAuth install URL; shows Developer Preview when unset |
 
 Never expose server tokens through `NEXT_PUBLIC_*` variables.
 
