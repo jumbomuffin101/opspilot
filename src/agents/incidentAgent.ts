@@ -1,6 +1,7 @@
 import { EvidenceAggregator } from "@/src/agents/evidenceAggregator";
-import { APP_DESCRIPTION, APP_NAME, ENVIRONMENT_KEYS } from "@/src/lib/constants";
+import { APP_DESCRIPTION, APP_NAME } from "@/src/lib/constants";
 import { logger } from "@/src/lib/logger";
+import { isDemoMode } from "@/src/lib/utils";
 import { generateIncidentInvestigationWithAI } from "@/src/services/openai";
 import { createDefaultToolRegistry } from "@/src/tools";
 import type { InvestigationQuery } from "@/src/tools";
@@ -330,13 +331,11 @@ export async function investigateIncidentDeterministically(
 /** Aggregates evidence, attempts AI reasoning, and always retains deterministic fallback. */
 export async function investigateIncident(issueText: string): Promise<IncidentInvestigation> {
   const evidence = await evidenceAggregator.collect(buildInvestigationQuery(issueText));
-  const demoMode =
-    process.env[ENVIRONMENT_KEYS.demoMode]?.trim().toLowerCase() === "true";
-
-  if (demoMode) {
-    logger.info("Incident investigation completed", {
+  if (isDemoMode()) {
+    logger.info("Demo mode active: using deterministic incident reasoning", {
       source: "deterministic",
       reason: "demo_mode",
+      scenario: isCheckoutApiScenario(issueText) ? "checkout_outage" : "generic",
     });
     return buildDeterministicInvestigation(issueText, evidence);
   }

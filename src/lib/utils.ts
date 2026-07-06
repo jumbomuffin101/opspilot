@@ -1,8 +1,13 @@
 import type { IncidentSeverity } from "@/src/types/incident";
 import type { IncidentActionContext } from "@/src/types/slack";
+import { ENVIRONMENT_KEYS } from "@/src/lib/constants";
 
 const SLACK_BUTTON_VALUE_LIMIT = 2_000;
 const ACTION_CONTEXT_VERSION = 1;
+
+export function isDemoMode(): boolean {
+  return process.env[ENVIRONMENT_KEYS.demoMode]?.trim().toLowerCase() === "true";
+}
 
 interface CompactIncidentActionContext {
   v: typeof ACTION_CONTEXT_VERSION;
@@ -44,6 +49,18 @@ export function formatSeverity(severity: IncidentSeverity): string {
   };
 
   return labels[severity];
+}
+
+export function formatIncidentStatus(status: string): string {
+  const normalized = status.trim().toLowerCase();
+  const labels: Record<string, string> = {
+    investigating: ":large_yellow_circle: Investigating",
+    identified: ":large_orange_circle: Identified",
+    monitoring: ":large_blue_circle: Monitoring",
+    resolved: ":white_check_mark: Resolved",
+  };
+
+  return labels[normalized] ?? status;
 }
 
 export function toCompactBullets(items: readonly string[], maximumItems = 5): string {

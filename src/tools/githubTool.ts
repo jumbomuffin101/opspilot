@@ -1,6 +1,6 @@
 import { mockDeployments } from "@/src/data/mockDeployments";
-import { ENVIRONMENT_KEYS } from "@/src/lib/constants";
 import { logger } from "@/src/lib/logger";
+import { isDemoMode } from "@/src/lib/utils";
 import { getGitHubServiceConfig } from "@/src/services/github";
 import type { IncidentTool, InvestigationQuery } from "@/src/tools/base";
 import type { CommitSignal, GitHubToolResult } from "@/src/types/tools";
@@ -255,7 +255,7 @@ async function fetchRealCommits(query: InvestigationQuery): Promise<CommitSignal
 }
 
 function shouldUseMockGitHub(): { useMock: boolean; reason?: string } {
-  if (process.env[ENVIRONMENT_KEYS.demoMode]?.trim().toLowerCase() === "true") {
+  if (isDemoMode()) {
     return { useMock: true, reason: "demo_mode" };
   }
 

@@ -1,58 +1,101 @@
 # OpsPilot
 
-OpsPilot is an AI incident commander designed to live inside Slack. It will bring incident context, deployment evidence, ownership, timelines, and recommended response actions into the channel where responders are already working.
+> **AI incident command, where the response already happens.**
 
-> Submission project for the **Slack Agent Builder Challenge**. Stage 8 adds a Slack Real-Time Search-ready evidence adapter with defensive mapping and deterministic mock fallback. MCP and deployment-provider APIs remain intentionally deferred.
+OpsPilot is a Slack-first AI Incident Commander built for the **Slack Agent Builder Challenge**. It turns an operational report into an evidence-backed incident brief, recommended response plan, incident room, postmortem draft, and resolution update without moving responders out of Slack.
+
+The web application is a submission and architecture surface. **Slack is the primary product interface.**
+
+## Demo command
+
+```text
+/opspilot investigate checkout API returning 500 errors after latest deploy
+```
+
+For judging, set `DEMO_MODE=true`. The checkout scenario then uses deterministic Slack history, commits, deployments, ownership, prior incidents, and reasoning while still receiving real signed Slack commands and button actions.
+
+## Demo flow
+
+1. A responder runs `/opspilot investigate ...` in Slack.
+2. OpsPilot immediately acknowledges the report.
+3. Independent tools collect Slack, GitHub, deployment, incident-history, and ownership evidence.
+4. OpsPilot posts a concise incident brief with severity, impact, confidence, likely causes, actions, owners, and next-update time.
+5. Responders can **Open Incident Room**, **Draft Postmortem**, or **Resolve Incident**.
+
+See the complete [three-minute demo script](docs/demo-script.md).
+
+## Features
+
+- Signed Slack slash-command and interactivity endpoints
+- Fast acknowledgement with deferred investigation delivery
+- Typed, concurrent evidence-tool architecture with partial-failure tolerance
+- Structured OpenAI reasoning with independent validation and deterministic fallback
+- Real GitHub commit retrieval, detail enrichment, relevance ranking, and mock fallback
+- Slack Real-Time Search-ready adapter with defensive response mapping and mock fallback
+- Polished Block Kit incident briefs and actionable incident-workflow buttons
+- Incident channel creation, response checklist, postmortem draft, and resolution update
+- Demo mode that makes the primary checkout outage path fully deterministic
+- Vercel-compatible Next.js App Router deployment and `/api/health` endpoint
 
 ## Architecture
 
-OpsPilot uses a modular TypeScript architecture so Slack transport, agent orchestration, service integrations, and domain tools can evolve independently:
-
-```text
-Slack interface
-      |
-      v
-Slack handlers ---> Incident agent ---> AI reasoning (optional)
-                         |                       |
-                         |                       v
-                         +--------------> Deterministic fallback
-                         |
-                         v
-                Evidence aggregator
-                         |
-                         v
-                    Tool registry
-                         |
-          +--------------+---------------+
-          v              v               v
-  Slack RTS/mock    Deploys/commits   History/ownership
+```mermaid
+flowchart LR
+    U["Responder in Slack"] --> C["/opspilot command"]
+    C --> V["Signature verification"]
+    V --> A["Fast acknowledgement"]
+    V --> I["Incident Agent"]
+    I --> E["Evidence Aggregator"]
+    E --> T["Tool Registry"]
+    T --> S["Slack RTS / mock"]
+    T --> G["GitHub API / mock"]
+    T --> D["Deployments / mock"]
+    T --> H["Incident history"]
+    T --> O["Ownership"]
+    E --> R{"Reasoning mode"}
+    R -->|"Production"| AI["OpenAI structured output"]
+    R -->|"Demo or failure"| F["Deterministic reasoning"]
+    AI --> B["Block Kit incident brief"]
+    F --> B
+    B --> U
+    U --> X["Interactive actions"]
+    X --> W["Incident room / postmortem / resolution"]
 ```
 
-The public Next.js page is a product landing page only. Slack remains the primary product interface.
+The agent receives only normalized `InvestigationEvidence`; it does not depend on provider response shapes. Replacing a mock provider changes a tool or service adapter, not the incident reasoning or Slack UI. See [docs/architecture.md](docs/architecture.md) for the full flow.
 
-## Folder structure
+## Project structure
 
 ```text
-app/                    Next.js App Router landing page
-public/                 Static assets
+app/
+  api/health/             Runtime health endpoint
+  api/slack/commands/     Slash-command endpoint
+  api/slack/actions/      Interactivity endpoint
+  page.tsx                Submission landing page
+docs/                     Architecture, Devpost copy, and demo script
 src/
-  agents/               Agent definitions and orchestration boundary
-  data/                 Realistic development fixtures
-  lib/                  Constants, logging, and shared utilities
-  services/             External service configuration and adapters
-  slack/                Blocks, commands, actions, and middleware
-  tools/                Registry and single-responsibility evidence tools
-  types/                Shared domain and integration types
+  agents/                 Evidence aggregation and incident reasoning
+  data/                   Deterministic incident and deployment fixtures
+  lib/                    Constants, logging, validation, and utilities
+  services/               OpenAI, GitHub, and Slack RTS adapters
+  slack/                  Blocks, handlers, client, commands, and verification
+  tools/                  Independent evidence tools and registry
+  types/                  Domain and integration contracts
 ```
+
+## Technologies used
+
+- Slack Platform: slash commands, Block Kit, Web API, interactivity, signing verification
+- Next.js 16 App Router and React 19
+- Strict TypeScript
+- Tailwind CSS 4
+- OpenAI Responses API with JSON Schema output
+- GitHub REST API
+- Vercel Functions
 
 ## Local development
 
-### Prerequisites
-
-- Node.js 20.9 or newer
-- npm 10 or newer
-
-### Setup
+Prerequisites: Node.js 20.9+ and npm 10+.
 
 ```bash
 npm install
@@ -60,9 +103,9 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The landing page does not require credentials. Signed Slack command requests require `SLACK_SIGNING_SECRET`, and posting investigation results requires `SLACK_BOT_TOKEN`.
+Open `http://localhost:3000`. Check runtime mode at `http://localhost:3000/api/health`.
 
-Quality checks:
+Quality commands:
 
 ```bash
 npm run typecheck
@@ -70,180 +113,120 @@ npm run lint
 npm run build
 ```
 
+## Environment variables
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SLACK_BOT_TOKEN` | Slack flow | Posts messages and manages incident channels |
+| `SLACK_SIGNING_SECRET` | Slack flow | Verifies command and interaction signatures |
+| `SLACK_APP_TOKEN` | No | Reserved for Slack Socket Mode |
+| `SLACK_RTS_ENABLED` | No | Enables configured Slack search when exactly `true` |
+| `SLACK_RTS_API_URL` | RTS only | Slack RTS or approved proxy endpoint |
+| `SLACK_RTS_TOKEN` | RTS only | Server-side bearer token for the RTS endpoint |
+| `OPENAI_API_KEY` | AI only | Enables structured AI reasoning outside demo mode |
+| `OPENAI_MODEL` | No | Model override; defaults to `gpt-4o-mini` |
+| `DEMO_MODE` | Recommended | `true` forces deterministic evidence and reasoning |
+| `GITHUB_TOKEN` | GitHub only | Token with repository Contents read access |
+| `GITHUB_OWNER` | GitHub only | Repository account or organization |
+| `GITHUB_REPO` | GitHub only | Repository name without `.git` |
+| `NEXT_PUBLIC_APP_URL` | Deployment | Public application URL |
+
+Never expose server tokens through `NEXT_PUBLIC_*` variables.
+
 ## Slack setup
 
-1. Create or open the Slack app used for OpsPilot.
-2. Under **OAuth & Permissions**, add these bot token scopes:
-   - `commands` — receive `/opspilot` invocations.
-   - `chat:write` — post investigations and action results.
-   - `channels:manage` — create public incident channels and invite responders.
-   - `channels:read` — find and reuse an incident channel when its name already exists.
-   - `chat:write.public` — optional, if OpsPilot must post in public channels it has not joined.
-3. Install or reinstall the app to the workspace after changing scopes.
-4. Under **Slash Commands**, create `/opspilot` and set its request URL to:
+1. Create a Slack app and install it to the demo workspace.
+2. Add bot scopes:
+   - `commands`
+   - `chat:write`
+   - `channels:manage`
+   - `channels:read`
+   - `chat:write.public` when posting to public channels the app has not joined
+3. Reinstall the app after changing scopes.
+4. Create `/opspilot` under **Slash Commands** with:
 
    ```text
    https://<your-domain>/api/slack/commands
    ```
 
-5. Copy the app's signing secret and bot token into `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN`.
-6. Under **Interactivity & Shortcuts**, enable interactivity and set the request URL to:
+5. Enable **Interactivity & Shortcuts** with:
 
    ```text
    https://<your-domain>/api/slack/actions
    ```
 
-For local development, expose the Next.js server through an HTTPS tunnel and use the tunnel URL for the request URL. Never commit real credentials.
+6. Configure `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN`.
+7. For local Slack testing, expose `npm run dev` through an HTTPS tunnel and use that public URL.
 
-Example command:
+## Demo mode and production fallbacks
 
-```text
-/opspilot investigate checkout API is failing after latest deploy
-```
+When `DEMO_MODE=true`:
 
-OpsPilot acknowledges the command immediately, aggregates evidence after the response, applies AI or deterministic reasoning, and posts the result through `chat.postMessage`.
+- Slack RTS is never called; mock Slack history is used.
+- GitHub is never called; mock commits are used.
+- Mock deployment signals are used.
+- OpenAI is never called; deterministic reasoning is used.
+- Real Slack commands, messages, channel creation, and button actions still run.
 
-The Stage 4 buttons run in deterministic mock mode:
+Outside demo mode, missing configuration, timeouts, rate limits, malformed responses, empty RTS results, invalid AI output, and individual tool failures degrade safely to mock or deterministic results. Tool execution and selected fallback paths are logged without secrets.
 
-- **Create Incident Channel** creates or reuses a channel such as `inc-checkout-api-0703`, invites available responders, and posts kickoff and checklist messages.
-- **Generate Postmortem** posts the structured mock draft with impact, timeline, root cause, resolution, and follow-ups.
-- **Mark Resolved** posts a final status update and post-incident reminders.
+## External integrations
 
-## Agent architecture
+### GitHub
 
-### Tool system
+Set `DEMO_MODE=false`, `GITHUB_TOKEN`, `GITHUB_OWNER`, and `GITHUB_REPO`. Fine-grained tokens need **Contents: read** for the selected repository. OpsPilot retrieves ten commits and enriches the newest three with changed files when available.
 
-Every evidence source implements the same `IncidentTool<Result>` contract and receives an `InvestigationQuery`. The default registry contains five independent tools:
+### Slack Real-Time Search-ready adapter
 
-- `SlackSearchTool` returns matching Slack messages from the configured RTS endpoint or deterministic mock fallback.
-- `GitHubTool` returns ranked commit-level code-change signals from GitHub or mock fallback.
-- `DeploymentTool` returns deployment events.
-- `IncidentHistoryTool` returns relevant prior incidents.
-- `OwnershipTool` returns service teams and responders.
+Set `DEMO_MODE=false`, `SLACK_RTS_ENABLED=true`, `SLACK_RTS_API_URL`, and `SLACK_RTS_TOKEN`. The adapter accepts Slack's `results.messages` response and conservative proxy variants. Slack bot-token calls to `assistant.search.context` require an action token, so a production installation may use an approved proxy or appropriate user-token flow.
 
-Tools have no knowledge of each other, Slack Block Kit, or deterministic reasoning. Each tool owns its integration and fallback behavior, so evidence providers can change without altering the agent.
+### OpenAI
 
-### Evidence aggregation
+Set `DEMO_MODE=false` and `OPENAI_API_KEY`. OpsPilot requests JSON Schema-constrained output, validates the complete investigation independently, and falls back deterministically on any failure.
 
-`EvidenceAggregator` runs every registered tool concurrently, records execution duration and success or failure, and returns one typed `InvestigationEvidence` object. A failed tool contributes a failure record while successful evidence remains available, so an investigation can continue with partial context.
-
-The incident agent receives only the aggregate. It can request a schema-constrained OpenAI investigation or apply the existing deterministic checkout or generic reasoning. Slash-command responses, interactive actions, and Block Kit rendering remain separate from this layer.
-
-### Future MCP compatibility
-
-The tool boundary is intentionally transport-neutral. The Slack search adapter already sits behind `SlackSearchTool`, so a future MCP tool or deployment-provider adapter can implement `IncidentTool<Result>` and register with `ToolRegistry` without changing the incident agent or Slack UX. No MCP server or deployment-provider integration is implemented in this stage.
-
-### AI reasoning and fallback
-
-When `DEMO_MODE=false` and `OPENAI_API_KEY` is configured, OpsPilot sends the issue and aggregated tool evidence to the OpenAI Responses API. The model is constrained by a strict JSON Schema, and OpsPilot independently validates every required `IncidentInvestigation` field before accepting the result.
-
-Fallback behavior is automatic:
-
-- `DEMO_MODE=true` skips OpenAI and always uses deterministic reasoning.
-- A missing API key uses deterministic reasoning.
-- API errors, timeouts, invalid JSON, or failed validation use deterministic reasoning.
-- Interactive button actions continue using deterministic incident and postmortem data.
-
-For judging and live demos, use `DEMO_MODE=true` for maximum reliability. Set `DEMO_MODE=false` only when demonstrating AI reasoning with a configured API key.
-
-## Slack Real-Time Search-ready integration
-
-`SlackSearchTool` keeps the existing evidence contract while delegating live retrieval to `src/services/slackRealTimeSearch.ts`. The adapter builds a concise query from the reported issue and suspected service, calls the configured endpoint, and defensively maps official Slack RTS messages or common proxy response shapes into typed evidence.
-
-To enable live Slack search:
-
-1. Set `DEMO_MODE=false`.
-2. Set `SLACK_RTS_ENABLED=true`.
-3. Set `SLACK_RTS_API_URL` to the approved RTS endpoint or internal proxy URL.
-4. Set `SLACK_RTS_TOKEN` to the bearer token accepted by that endpoint.
-
-For Slack's `assistant.search.context` endpoint, grant the token at least `search:read.public`; private channels, direct messages, group messages, and files require their corresponding search scopes. Slack bot-token calls also require a user-provided action token, so production installations may use a user token or a small approved proxy that supplies the action token. Keep that concern inside the service adapter rather than the incident agent.
-
-Fallback is automatic and deterministic. OpsPilot uses mock Slack history when `DEMO_MODE=true`, RTS is disabled, configuration is incomplete, the request times out or fails, the response is malformed, or no usable messages are returned. Production RTS credentials can therefore be plugged in without changing evidence aggregation, reasoning, Block Kit, commands, or button handlers.
-
-## Demo intelligence
-
-The primary demo scenario is **checkout API returning HTTP 500 after deployment**. Keyword matching correlates the report with concise enterprise-style fixtures for:
-
-- Slack support and engineering signals
-- Production deployment timing
-- GitHub commit changes, using the configured repository when available
-- Observability evidence
-- A similar resolved checkout incident
-- Service ownership and responder roles
-
-The resulting Slack message includes:
-
-1. Incident overview, status, severity, and confidence
-2. Customer and operational impact
-3. Evidence grouped by Slack history, deploy history, code changes, and observability
-4. Similar incidents and recent deployments
-5. Ranked likely root causes
-6. Practical recommended actions and suggested owners
-7. A drafted status update and next-update deadline
-
-Reports that do not match the checkout scenario receive a lower-confidence generic investigation with a safe triage checklist. Every result also includes a structured postmortem draft for the future action-handler stage.
-
-## GitHub integration
-
-When `DEMO_MODE=false` and all GitHub variables are configured, `GitHubTool` requests the latest 10 commits from `GITHUB_OWNER/GITHUB_REPO`. It enriches the newest three commits with changed file paths, calculates relevance from the issue, service, commit message, and files, then returns the most relevant evidence first.
-
-Configuration:
-
-1. Create a fine-grained personal access token or GitHub App token with **Contents: read** permission for the target repository. A classic token requires repository read access (`repo` for private repositories).
-2. Set `GITHUB_TOKEN` to the token.
-3. Set `GITHUB_OWNER` to the account or organization name.
-4. Set `GITHUB_REPO` to the repository name without `.git`.
-5. Set `DEMO_MODE=false` to enable live GitHub requests.
-
-`DEMO_MODE=true` always uses mock GitHub evidence. Missing credentials, malformed responses, timeouts, permission failures, and rate limits also fall back automatically. If one of the optional commit-detail requests fails, OpsPilot retains the basic commit data.
-
-Troubleshooting:
-
-- `404` for a private repository usually means the token cannot access that repository or the owner/repository values are incorrect.
-- `403` or `429` may indicate rate limiting; wait for the reset window instead of repeatedly retrying.
-- Confirm **Contents: read** permission and reinstall or reauthorize the token after changing access.
-
-## Deployment
-
-The application is compatible with Vercel's zero-configuration Next.js deployment flow:
+## Vercel deployment
 
 1. Import the repository into Vercel.
-2. Configure the variables listed in `.env.example` for the appropriate environments.
-3. Deploy using the default Next.js build command.
+2. Keep the default Next.js build command: `npm run build`.
+3. Add the required environment variables for Preview and Production.
+4. Deploy and verify `https://<your-domain>/api/health`.
+5. Configure the deployed Slack command and interactivity URLs.
+6. Reinstall the Slack app after any scope changes and run the demo command.
 
-Runtime service clients should remain lazily initialized so missing build-time secrets do not break static generation.
+All external clients are initialized at request time, so missing build-time secrets do not break static generation.
 
-## Environment variables
+## Known limitations
 
-| Variable | Purpose |
-| --- | --- |
-| `SLACK_BOT_TOKEN` | Slack bot authentication |
-| `SLACK_SIGNING_SECRET` | Slack request verification |
-| `SLACK_APP_TOKEN` | Slack Socket Mode authentication |
-| `SLACK_RTS_ENABLED` | Set `true` to enable the configured Slack search adapter; defaults to mock evidence |
-| `SLACK_RTS_API_URL` | Optional Slack RTS or approved proxy endpoint |
-| `SLACK_RTS_TOKEN` | Optional server-side bearer token for the configured RTS endpoint |
-| `OPENAI_API_KEY` | Optional OpenAI API authentication; never exposed to the browser |
-| `OPENAI_MODEL` | Optional model override; defaults to `gpt-4o-mini` |
-| `DEMO_MODE` | Set `true` to force deterministic reasoning; recommended for demos |
-| `GITHUB_TOKEN` | Optional GitHub token with repository Contents read access |
-| `GITHUB_OWNER` | GitHub account or organization containing the evidence repository |
-| `GITHUB_REPO` | GitHub evidence repository name without `.git` |
-| `NEXT_PUBLIC_APP_URL` | Public deployment URL |
+- Slash-command payloads do not include a message timestamp for the acknowledgement, so the final result is posted to the originating channel rather than a guaranteed thread. Threading would require changing delivery to first create a Web API message and retain its `ts`.
+- Deployment evidence is currently deterministic mock data; no deployment-provider API is connected.
+- RTS credentials and action-token exchange depend on the production Slack installation model.
+- Incident state is not persisted; action handlers reconstruct deterministic incident context.
+- Buttons do not yet disable after use, so repeated actions are possible.
+- MCP is intentionally not implemented in this stage.
 
-## Hackathon
+## Future roadmap
 
-OpsPilot is being built for the Slack Agent Builder Challenge. The goal is a Slack-native operational assistant that helps responders establish shared context quickly while retaining clear human ownership of incident decisions.
+- Persist incident state, action idempotency keys, and audit events
+- Add durable background execution and retry handling
+- Integrate a production deployment provider
+- Add workspace-specific RTS authorization and citation controls
+- Add evaluation suites for AI/deterministic parity and Block Kit snapshots
+- Add MCP adapters behind the existing tool registry
+- Add observability, access controls, and incident analytics
 
-## Roadmap
+## Hackathon submission notes
 
-- Add idempotency and retry handling for Slack command deliveries
-- Add evaluations for AI and deterministic investigation parity
-- Replace mock deployment evidence with a cloud deployment-provider adapter
-- Add production action-token exchange and workspace-specific RTS scope controls
-- Persist incidents, audit events, and post-incident reports
-- Add observability, evaluation, access control, and production hardening
+OpsPilot is designed around three judging outcomes:
+
+- **Useful Slack experience:** the complete response loop happens in Slack.
+- **Technical quality:** signed requests, typed tools, validated AI output, provider isolation, and graceful fallback.
+- **Demonstrable impact:** responders move from an ambiguous outage report to a coordinated plan in one command.
+
+Submission assets:
+
+- [Devpost copy](docs/devpost.md)
+- [Three-minute demo script](docs/demo-script.md)
+- [Architecture source](docs/architecture.md)
 
 ## License
 

@@ -1,6 +1,7 @@
 import {
   formatCompactTimestamp,
   formatConfidenceScore,
+  formatIncidentStatus,
   formatSeverity,
   encodeIncidentActionContext,
   toCompactBullets,
@@ -37,14 +38,14 @@ function formatEvidenceGroup(source: IncidentEvidenceSource, evidence: IncidentE
         `*${escapeMrkdwn(item.signal)}* (${formatCompactTimestamp(item.capturedAt)}) — ${escapeMrkdwn(item.detail)}`,
     );
 
-  return items.length > 0 ? `*${EVIDENCE_LABELS[source]}*\n${toCompactBullets(items, 3)}` : "";
+  return items.length > 0 ? `*${EVIDENCE_LABELS[source]}*\n${toCompactBullets(items, 2)}` : "";
 }
 
 export function investigationStartedBlocks(issueText: string, requesterId: string): KnownBlock[] {
   return [
     {
       type: "header",
-      text: { type: "plain_text", text: "OpsPilot is investigating this incident..." },
+      text: { type: "plain_text", text: "OpsPilot is investigating" },
     },
     {
       type: "section",
@@ -65,7 +66,7 @@ export function investigationStartedBlocks(issueText: string, requesterId: strin
       elements: [
         {
           type: "mrkdwn",
-          text: "Correlating the report with mock Slack history, deployments, code changes, and prior incidents.",
+          text: "Correlating Slack context, deployments, code changes, ownership, and incident history.",
         },
       ],
     },
@@ -116,14 +117,14 @@ export function investigationResultBlocks(
   return [
     {
       type: "header",
-      text: { type: "plain_text", text: "OpsPilot Incident Intelligence" },
+      text: { type: "plain_text", text: "OpsPilot Incident Brief" },
     },
     {
       type: "section",
       text: {
         type: "mrkdwn",
         text: truncateSlackText(
-          `*Incident Overview*\n*${escapeMrkdwn(investigation.title)}*\n${formatSeverity(investigation.severity)} · \`${investigation.service}\` · ${investigation.status}\n*${investigation.id}* · ${formatConfidenceScore(investigation.confidenceScore)}\n\n${escapeMrkdwn(investigation.summary)}`,
+          `*${escapeMrkdwn(investigation.title)}*\n${formatSeverity(investigation.severity)}  |  ${formatIncidentStatus(investigation.status)}\n*Service:* \`${investigation.service}\`  |  ${formatConfidenceScore(investigation.confidenceScore)}\n*Incident:* ${investigation.id}\n\n${escapeMrkdwn(investigation.summary)}`,
         ),
       },
     },
@@ -147,8 +148,8 @@ export function investigationResultBlocks(
         type: "mrkdwn",
         text: `*Similar Incidents*\n${
           similarIncidents.length
-            ? truncateSlackText(compactBullets(similarIncidents, 2))
-            : "_No close historical match found in mock incident history._"
+            ? truncateSlackText(compactBullets(similarIncidents, 1))
+            : "_No close historical match found._"
         }`,
       },
     },
@@ -158,8 +159,8 @@ export function investigationResultBlocks(
         type: "mrkdwn",
         text: `*Recent Deployments*\n${
           recentDeployments.length
-            ? truncateSlackText(toCompactBullets(recentDeployments, 2))
-            : "_No correlated deployment found in the mock window._"
+            ? truncateSlackText(toCompactBullets(recentDeployments, 1))
+            : "_No correlated deployment found in the investigation window._"
         }`,
       },
     },
@@ -194,7 +195,7 @@ export function investigationResultBlocks(
       text: {
         type: "mrkdwn",
         text: truncateSlackText(
-          `*Next Update*\nDue ${formatCompactTimestamp(investigation.nextUpdateDue)}\n\n*Draft status update*\n>${escapeMrkdwn(investigation.statusUpdate)}`,
+          `*Next update due:* ${formatCompactTimestamp(investigation.nextUpdateDue)}\n\n*Ready-to-post status update*\n>${escapeMrkdwn(investigation.statusUpdate)}`,
         ),
       },
     },
@@ -204,20 +205,20 @@ export function investigationResultBlocks(
       elements: [
         {
           type: "button",
-          text: { type: "plain_text", text: "Create Incident Channel", emoji: true },
+          text: { type: "plain_text", text: "Open Incident Room", emoji: true },
           action_id: "create_incident_channel",
           value: actionValue,
           style: "primary",
         },
         {
           type: "button",
-          text: { type: "plain_text", text: "Generate Postmortem", emoji: true },
+          text: { type: "plain_text", text: "Draft Postmortem", emoji: true },
           action_id: "generate_postmortem",
           value: actionValue,
         },
         {
           type: "button",
-          text: { type: "plain_text", text: "Mark Resolved", emoji: true },
+          text: { type: "plain_text", text: "Resolve Incident", emoji: true },
           action_id: "mark_resolved",
           value: actionValue,
           style: "danger",
@@ -229,7 +230,7 @@ export function investigationResultBlocks(
       elements: [
         {
           type: "mrkdwn",
-          text: "Deterministic mock intelligence · Review evidence before taking action.",
+          text: "OpsPilot synthesis · Human review required before operational changes.",
         },
       ],
     },
@@ -357,7 +358,7 @@ export function postmortemDraftBlocks(investigation: IncidentInvestigation): Kno
     },
     {
       type: "context",
-      elements: [{ type: "mrkdwn", text: "Mock draft · Validate details before publishing." }],
+      elements: [{ type: "mrkdwn", text: "Draft from current incident evidence · Validate before publishing." }],
     },
   ];
 }
@@ -444,7 +445,7 @@ export function unknownCommandBlocks(commandName: string): KnownBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `I don't recognize ${displayedCommand}.\n\n*Available commands*\n• \`investigate <issue>\` — run a mock incident investigation`,
+        text: `I don't recognize ${displayedCommand}.\n\n*Available commands*\n• \`investigate <issue>\` — investigate an operational issue`,
       },
     },
   ];

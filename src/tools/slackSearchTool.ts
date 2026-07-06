@@ -1,7 +1,8 @@
 import { mockSlackIncidentMessages } from "@/src/data/mockIncidents";
 import { ENVIRONMENT_KEYS } from "@/src/lib/constants";
 import { logger } from "@/src/lib/logger";
-import { searchSlackRealTime } from "@/src/services/slackRealTimeSearch";
+import { isDemoMode } from "@/src/lib/utils";
+import { searchSlackRealTime } from "@/src/services/slackSearch";
 import type { IncidentTool, InvestigationQuery } from "@/src/tools/base";
 import type { SlackSearchResult } from "@/src/types/tools";
 
@@ -19,13 +20,17 @@ export class SlackSearchTool implements IncidentTool<SlackSearchResult> {
   readonly name = "slack-search";
 
   async execute(query: InvestigationQuery): Promise<SlackSearchResult> {
-    const demoMode = process.env[ENVIRONMENT_KEYS.demoMode]?.toLowerCase() === "true";
     const rtsEnabled =
       process.env[ENVIRONMENT_KEYS.slackRtsEnabled]?.toLowerCase() === "true";
     const apiUrl = process.env[ENVIRONMENT_KEYS.slackRtsApiUrl]?.trim();
     const token = process.env[ENVIRONMENT_KEYS.slackRtsToken]?.trim();
 
-    if (demoMode || !rtsEnabled || !apiUrl || !token) return getMockResults(query);
+    if (isDemoMode()) {
+      logger.info("Demo mode active: SlackSearchTool using mock history");
+      return getMockResults(query);
+    }
+
+    if (!rtsEnabled || !apiUrl || !token) return getMockResults(query);
 
     const liveResults = await searchSlackRealTime(query);
     const messages = liveResults?.flatMap((result) => result.messages) ?? [];
