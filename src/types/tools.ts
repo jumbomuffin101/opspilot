@@ -6,6 +6,7 @@ export interface SlackMessageSignal {
   text: string;
   timestamp: string;
   permalink?: string;
+  relevanceScore?: number;
 }
 
 export interface SlackSearchResult {

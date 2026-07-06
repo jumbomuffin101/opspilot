@@ -2,7 +2,7 @@
 
 OpsPilot is an AI incident commander designed to live inside Slack. It will bring incident context, deployment evidence, ownership, timelines, and recommended response actions into the channel where responders are already working.
 
-> Submission project for the **Slack Agent Builder Challenge**. Stage 7 adds real GitHub commit evidence with relevance ranking and mock fallback. MCP, real-time Slack search, and deployment-provider APIs remain intentionally deferred.
+> Submission project for the **Slack Agent Builder Challenge**. Stage 8 adds a Slack Real-Time Search-ready evidence adapter with defensive mapping and deterministic mock fallback. MCP and deployment-provider APIs remain intentionally deferred.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ Slack handlers ---> Incident agent ---> AI reasoning (optional)
                          |
           +--------------+---------------+
           v              v               v
-    Slack history   Deploys/commits   History/ownership
+  Slack RTS/mock    Deploys/commits   History/ownership
 ```
 
 The public Next.js page is a product landing page only. Slack remains the primary product interface.
@@ -115,7 +115,7 @@ The Stage 4 buttons run in deterministic mock mode:
 
 Every evidence source implements the same `IncidentTool<Result>` contract and receives an `InvestigationQuery`. The default registry contains five independent tools:
 
-- `SlackSearchTool` returns matching historical Slack messages.
+- `SlackSearchTool` returns matching Slack messages from the configured RTS endpoint or deterministic mock fallback.
 - `GitHubTool` returns ranked commit-level code-change signals from GitHub or mock fallback.
 - `DeploymentTool` returns deployment events.
 - `IncidentHistoryTool` returns relevant prior incidents.
@@ -131,7 +131,7 @@ The incident agent receives only the aggregate. It can request a schema-constrai
 
 ### Future MCP compatibility
 
-The tool boundary is intentionally transport-neutral. A future MCP tool, Slack Real-Time Search adapter, or deployment-provider adapter can implement `IncidentTool<Result>` and register with `ToolRegistry` without changing the incident agent or Slack UX. No MCP, Slack Real-Time Search, or deployment-provider integration is implemented in this stage.
+The tool boundary is intentionally transport-neutral. The Slack search adapter already sits behind `SlackSearchTool`, so a future MCP tool or deployment-provider adapter can implement `IncidentTool<Result>` and register with `ToolRegistry` without changing the incident agent or Slack UX. No MCP server or deployment-provider integration is implemented in this stage.
 
 ### AI reasoning and fallback
 
@@ -145,6 +145,21 @@ Fallback behavior is automatic:
 - Interactive button actions continue using deterministic incident and postmortem data.
 
 For judging and live demos, use `DEMO_MODE=true` for maximum reliability. Set `DEMO_MODE=false` only when demonstrating AI reasoning with a configured API key.
+
+## Slack Real-Time Search-ready integration
+
+`SlackSearchTool` keeps the existing evidence contract while delegating live retrieval to `src/services/slackRealTimeSearch.ts`. The adapter builds a concise query from the reported issue and suspected service, calls the configured endpoint, and defensively maps official Slack RTS messages or common proxy response shapes into typed evidence.
+
+To enable live Slack search:
+
+1. Set `DEMO_MODE=false`.
+2. Set `SLACK_RTS_ENABLED=true`.
+3. Set `SLACK_RTS_API_URL` to the approved RTS endpoint or internal proxy URL.
+4. Set `SLACK_RTS_TOKEN` to the bearer token accepted by that endpoint.
+
+For Slack's `assistant.search.context` endpoint, grant the token at least `search:read.public`; private channels, direct messages, group messages, and files require their corresponding search scopes. Slack bot-token calls also require a user-provided action token, so production installations may use a user token or a small approved proxy that supplies the action token. Keep that concern inside the service adapter rather than the incident agent.
+
+Fallback is automatic and deterministic. OpsPilot uses mock Slack history when `DEMO_MODE=true`, RTS is disabled, configuration is incomplete, the request times out or fails, the response is malformed, or no usable messages are returned. Production RTS credentials can therefore be plugged in without changing evidence aggregation, reasoning, Block Kit, commands, or button handlers.
 
 ## Demo intelligence
 
@@ -206,6 +221,9 @@ Runtime service clients should remain lazily initialized so missing build-time s
 | `SLACK_BOT_TOKEN` | Slack bot authentication |
 | `SLACK_SIGNING_SECRET` | Slack request verification |
 | `SLACK_APP_TOKEN` | Slack Socket Mode authentication |
+| `SLACK_RTS_ENABLED` | Set `true` to enable the configured Slack search adapter; defaults to mock evidence |
+| `SLACK_RTS_API_URL` | Optional Slack RTS or approved proxy endpoint |
+| `SLACK_RTS_TOKEN` | Optional server-side bearer token for the configured RTS endpoint |
 | `OPENAI_API_KEY` | Optional OpenAI API authentication; never exposed to the browser |
 | `OPENAI_MODEL` | Optional model override; defaults to `gpt-4o-mini` |
 | `DEMO_MODE` | Set `true` to force deterministic reasoning; recommended for demos |
@@ -223,7 +241,7 @@ OpsPilot is being built for the Slack Agent Builder Challenge. The goal is a Sla
 - Add idempotency and retry handling for Slack command deliveries
 - Add evaluations for AI and deterministic investigation parity
 - Replace mock deployment evidence with a cloud deployment-provider adapter
-- Add Slack search with scoped evidence and citations
+- Add production action-token exchange and workspace-specific RTS scope controls
 - Persist incidents, audit events, and post-incident reports
 - Add observability, evaluation, access control, and production hardening
 
