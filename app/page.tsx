@@ -17,7 +17,7 @@ const features = [
 ];
 
 const workflow = [
-  ["01", "Report", "Run /opspilot investigate from the channel where the incident starts."],
+  ["01", "Report", "Mention @OpsPilot naturally or run /opspilot where the incident starts."],
   ["02", "Correlate", "OpsPilot gathers operational signals through independent evidence tools."],
   ["03", "Decide", "Responders receive likely causes, practical actions, owners, and confidence."],
   ["04", "Coordinate", "Open an incident room, draft the postmortem, and resolve from Slack."],
@@ -101,8 +101,8 @@ export default function Home() {
             </span>
           </h1>
           <p className="mt-8 max-w-2xl text-lg leading-8 text-slate-400 sm:text-xl">
-            OpsPilot is the AI incident commander that investigates, explains, and coordinates
-            response without pulling your team out of Slack.
+            Mention OpsPilot in natural language to investigate, explain, and coordinate response
+            without pulling your team out of Slack.
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-4">
             <a

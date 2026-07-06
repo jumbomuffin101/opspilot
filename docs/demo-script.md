@@ -16,17 +16,17 @@
 
 Show the OpsPilot landing page briefly, then switch immediately to Slack. Emphasize that Slack is the primary interface.
 
-## 0:20–0:40 — Run the slash command
+## 0:20–0:40 — Start a conversational investigation
 
-Enter:
+Mention OpsPilot:
 
 ```text
-/opspilot investigate checkout API returning 500 errors after latest deploy
+@OpsPilot investigate checkout API returning 500 errors after latest deploy
 ```
 
 **Say:**
 
-“A responder reports the issue in natural language. OpsPilot acknowledges immediately, verifies the signed request, and investigates asynchronously.”
+“A responder reports the issue in natural language. OpsPilot acknowledges the signed app-mention event immediately and investigates asynchronously in a thread. The slash command remains available.”
 
 Point out the requester, issue text, and investigating status.
 
@@ -44,6 +44,14 @@ When the incident brief appears, highlight in this order:
 **Say:**
 
 “OpsPilot has converted an ambiguous report into a shared operating picture. It explains what is happening, why it believes that, who should respond, and what the team should do next. In demo mode every evidence source and the reasoning are deterministic, while Slack delivery remains real.”
+
+Ask a follow-up in the same channel:
+
+```text
+@OpsPilot explain why you think the database is responsible
+```
+
+Show the focused explanation and point out that OpsPilot reused the active incident instead of running another investigation.
 
 ## 1:30–2:05 — Open the incident room
 

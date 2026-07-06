@@ -34,7 +34,9 @@ export interface IncidentActionContext {
   service: string;
   severity: "SEV-1" | "SEV-2" | "SEV-3" | "SEV-4";
   channelId: string;
+  teamId?: string;
   requesterId?: string;
+  threadTs?: string;
 }
 
 export type IncidentActionId =
@@ -63,4 +65,48 @@ export interface IncidentActionPayload {
   actionId: IncidentActionId;
   context: IncidentActionContext;
   actorUserId: string;
+}
+
+export type ConversationalIntent =
+  | "investigate"
+  | "summarize"
+  | "explain"
+  | "status"
+  | "timeline"
+  | "owner"
+  | "deployments"
+  | "evidence"
+  | "postmortem"
+  | "resolve"
+  | "help";
+
+export interface RoutedConversationalIntent {
+  intent: ConversationalIntent;
+  query: string;
+  executiveSummary: boolean;
+}
+
+export interface SlackAppMentionEvent {
+  type: "app_mention";
+  user: string;
+  text: string;
+  channel: string;
+  ts: string;
+  thread_ts?: string;
+  event_ts?: string;
+  bot_id?: string;
+  subtype?: string;
+}
+
+export interface SlackEventCallbackEnvelope {
+  type: "event_callback";
+  team_id: string;
+  event_id: string;
+  event_time?: number;
+  event: SlackAppMentionEvent;
+}
+
+export interface SlackUrlVerificationPayload {
+  type: "url_verification";
+  challenge: string;
 }

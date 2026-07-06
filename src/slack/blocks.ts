@@ -75,7 +75,10 @@ export function investigationStartedBlocks(issueText: string, requesterId: strin
 
 export function investigationResultBlocks(
   investigation: IncidentInvestigation,
-  deliveryContext: Pick<IncidentActionContext, "channelId" | "requesterId">,
+  deliveryContext: Pick<
+    IncidentActionContext,
+    "channelId" | "teamId" | "requesterId" | "threadTs"
+  >,
 ): KnownBlock[] {
   const actionValue = encodeIncidentActionContext({
     incidentId: investigation.id,
@@ -83,7 +86,9 @@ export function investigationResultBlocks(
     service: investigation.service,
     severity: investigation.severity,
     channelId: deliveryContext.channelId,
+    teamId: deliveryContext.teamId,
     requesterId: deliveryContext.requesterId,
+    threadTs: deliveryContext.threadTs,
   });
   const evidence = (
     ["slack_history", "deploy_history", "code_change", "observability"] as const
@@ -464,5 +469,247 @@ export function investigationErrorBlocks(issueText: string): KnownBlock[] {
         text: `Something went wrong while investigating "${escapeMrkdwn(truncateSlackText(issueText, 500))}". Please try again in a moment.`,
       },
     },
+  ];
+}
+
+function conversationalFooter(investigation: IncidentInvestigation): KnownBlock {
+  return {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `Active incident: *${investigation.id}* · Ask *@OpsPilot* for status, evidence, owners, deployments, timeline, or postmortem.`,
+      },
+    ],
+  };
+}
+
+export function conversationalHelpBlocks(): KnownBlock[] {
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: "Talk to OpsPilot" },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "Mention me with a natural-language request. Start an incident with:\n`@OpsPilot investigate checkout failures`",
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*During an active incident, ask:*\n• Summarize the current incident\n• Explain the leading hypothesis\n• Show the deployment timeline\n• What evidence supports the conclusion?\n• Who owns checkout-api?\n• Generate an executive summary\n• Draft the postmortem\n• Resolve the incident",
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: "The `/opspilot investigate …` slash command remains available." },
+      ],
+    },
+  ];
+}
+
+export function noActiveIncidentBlocks(): KnownBlock[] {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: ":information_source: *There is no active incident in this channel.*\nStart one with `@OpsPilot investigate <issue>` or `/opspilot investigate <issue>`.",
+      },
+    },
+  ];
+}
+
+export function conversationalSummaryBlocks(
+  investigation: IncidentInvestigation,
+  executiveSummary: boolean,
+): KnownBlock[] {
+  const headline = executiveSummary ? "Executive Incident Summary" : "Current Incident Summary";
+  const customerImpact = investigation.customerImpact.estimatedFailedRequests
+    ? ` Approximately ${investigation.customerImpact.estimatedFailedRequests.toLocaleString("en-US")} requests are estimated to have failed.`
+    : "";
+
+  return [
+    { type: "header", text: { type: "plain_text", text: headline } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${escapeMrkdwn(investigation.title)}*\n${formatSeverity(investigation.severity)}  |  ${formatIncidentStatus(investigation.status)}\n\n${escapeMrkdwn(investigation.summary)}`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Business impact*\n${escapeMrkdwn(investigation.customerImpact.description)}${customerImpact}\n\n*Current action*\n${escapeMrkdwn(investigation.recommendedActions[0] ?? "Continue validating impact and containment.")}`,
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `${formatConfidenceScore(investigation.confidenceScore)} · Next update ${formatCompactTimestamp(investigation.nextUpdateDue)}`,
+        },
+      ],
+    },
+    conversationalFooter(investigation),
+  ];
+}
+
+export function conversationalExplanationBlocks(
+  investigation: IncidentInvestigation,
+): KnownBlock[] {
+  const supportingEvidence = investigation.evidence
+    .filter((item) => item.source === "code_change" || item.source === "deploy_history" || item.source === "observability")
+    .slice(0, 3)
+    .map((item) => `*${escapeMrkdwn(item.signal)}* — ${escapeMrkdwn(item.detail)}`);
+  const supportingEvidenceText = supportingEvidence.length
+    ? toCompactBullets(supportingEvidence, 3)
+    : "_No correlated deploy, code, or observability evidence is available yet._";
+
+  return [
+    { type: "header", text: { type: "plain_text", text: "Why this is the leading hypothesis" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Leading hypothesis*\n${escapeMrkdwn(investigation.likelyRootCauses[0] ?? "The root cause is still being validated.")}\n\n*Why OpsPilot thinks this*\n${supportingEvidenceText}`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Alternative hypotheses*\n${compactBullets(investigation.likelyRootCauses.slice(1), 2)}`,
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `${formatConfidenceScore(investigation.confidenceScore)} · Correlation is not proof; responders should validate before remediation.`,
+        },
+      ],
+    },
+    conversationalFooter(investigation),
+  ];
+}
+
+export function conversationalStatusBlocks(investigation: IncidentInvestigation): KnownBlock[] {
+  return [
+    { type: "header", text: { type: "plain_text", text: "Incident Status" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${investigation.id} · ${escapeMrkdwn(investigation.title)}*\n${formatIncidentStatus(investigation.status)}  |  ${formatSeverity(investigation.severity)}\n\n>${escapeMrkdwn(investigation.statusUpdate)}`,
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: `Next update due ${formatCompactTimestamp(investigation.nextUpdateDue)}` },
+      ],
+    },
+    conversationalFooter(investigation),
+  ];
+}
+
+export function conversationalTimelineBlocks(investigation: IncidentInvestigation): KnownBlock[] {
+  const timeline = investigation.timeline.slice(0, 8).map(
+    (entry) =>
+      `*${formatCompactTimestamp(entry.timestamp)}* — ${escapeMrkdwn(entry.event)} _(${escapeMrkdwn(entry.author)})_`,
+  );
+
+  return [
+    { type: "header", text: { type: "plain_text", text: "Incident Timeline" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: timeline.length ? toCompactBullets(timeline, 8) : "_No timeline events are available yet._",
+      },
+    },
+    conversationalFooter(investigation),
+  ];
+}
+
+export function conversationalOwnersBlocks(investigation: IncidentInvestigation): KnownBlock[] {
+  const owners = investigation.suggestedOwners.map(
+    (owner) =>
+      `${owner.slackUserId ? `<@${owner.slackUserId}>` : `*${escapeMrkdwn(owner.name)}*`} — ${escapeMrkdwn(owner.role)}, ${escapeMrkdwn(owner.team)}`,
+  );
+
+  return [
+    { type: "header", text: { type: "plain_text", text: "Suggested Incident Owners" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Service:* \`${investigation.service}\`\n${owners.length ? toCompactBullets(owners, 5) : "_No owner is assigned yet._"}`,
+      },
+    },
+    conversationalFooter(investigation),
+  ];
+}
+
+export function conversationalDeploymentsBlocks(
+  investigation: IncidentInvestigation,
+): KnownBlock[] {
+  const deployments = investigation.recentDeployments.slice(0, 4).map((deployment) => {
+    const riskyCommit = deployment.commitSignals.find((commit) => commit.risk === "high");
+    const commit = riskyCommit
+      ? `\n↳ High-risk: \`${riskyCommit.sha.slice(0, 7)}\` ${escapeMrkdwn(riskyCommit.message)}`
+      : "";
+    return `*${deployment.version} · ${escapeMrkdwn(deployment.status)}* — ${formatCompactTimestamp(deployment.deployedAt)}\n${escapeMrkdwn(deployment.summary)}${commit}`;
+  });
+
+  return [
+    { type: "header", text: { type: "plain_text", text: "Deployment Timeline" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: deployments.length
+          ? toCompactBullets(deployments, 4)
+          : "_No correlated deployments are available for this incident._",
+      },
+    },
+    conversationalFooter(investigation),
+  ];
+}
+
+export function conversationalEvidenceBlocks(investigation: IncidentInvestigation): KnownBlock[] {
+  const evidence = (
+    ["slack_history", "deploy_history", "code_change", "observability"] as const
+  )
+    .map((source) => formatEvidenceGroup(source, investigation.evidence))
+    .filter(Boolean)
+    .join("\n\n");
+
+  return [
+    { type: "header", text: { type: "plain_text", text: "Supporting Evidence" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(evidence || "_No supporting evidence is available yet._"),
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: `${formatConfidenceScore(investigation.confidenceScore)} · Evidence is grouped by source.` },
+      ],
+    },
+    conversationalFooter(investigation),
   ];
 }

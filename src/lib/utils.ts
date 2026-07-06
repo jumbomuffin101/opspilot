@@ -16,7 +16,9 @@ interface CompactIncidentActionContext {
   s: string;
   z: IncidentSeverity;
   c: string;
+  w?: string;
   r?: string;
+  h?: string;
 }
 
 export function formatCompactTimestamp(timestamp: string): string {
@@ -80,7 +82,9 @@ export function encodeIncidentActionContext(context: IncidentActionContext): str
     s: context.service,
     z: context.severity,
     c: context.channelId,
+    ...(context.teamId ? { w: context.teamId } : {}),
     ...(context.requesterId ? { r: context.requesterId } : {}),
+    ...(context.threadTs ? { h: context.threadTs } : {}),
   };
   const encoded = JSON.stringify(compactContext);
 
@@ -107,7 +111,9 @@ export function decodeIncidentActionContext(value: string): IncidentActionContex
       context.v !== ACTION_CONTEXT_VERSION ||
       !validSeverity ||
       !hasValidStrings ||
-      (context.r !== undefined && (typeof context.r !== "string" || context.r.length > 100))
+      (context.w !== undefined && (typeof context.w !== "string" || context.w.length > 100)) ||
+      (context.r !== undefined && (typeof context.r !== "string" || context.r.length > 100)) ||
+      (context.h !== undefined && (typeof context.h !== "string" || context.h.length > 100))
     ) {
       return null;
     }
@@ -118,7 +124,9 @@ export function decodeIncidentActionContext(value: string): IncidentActionContex
       service: context.s as string,
       severity: context.z as IncidentSeverity,
       channelId: context.c as string,
+      teamId: context.w,
       requesterId: context.r,
+      threadTs: context.h,
     };
   } catch {
     return null;

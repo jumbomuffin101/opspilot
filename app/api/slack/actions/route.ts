@@ -110,6 +110,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             "The action could not be completed. Check the Slack app scopes and try again.",
           ),
           "OpsPilot action failed",
+          actionPayload.context.threadTs,
         );
       } catch (notificationError) {
         logger.error("Failed to post Slack action error message", {

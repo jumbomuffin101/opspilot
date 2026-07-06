@@ -132,3 +132,15 @@ export interface IncidentInvestigation {
   customerImpact: CustomerImpact;
   nextUpdateDue: string;
 }
+
+/** Active conversational incident retained for follow-up requests in a warm runtime. */
+export interface IncidentContext {
+  teamId: string;
+  channelId: string;
+  threadTs?: string;
+  requesterId: string;
+  issueText: string;
+  investigation: IncidentInvestigation;
+  createdAt: string;
+  updatedAt: string;
+}

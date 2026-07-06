@@ -1,4 +1,5 @@
 import { investigateIncidentDeterministically } from "@/src/agents/incidentAgent";
+import { updateActiveIncidentStatus } from "@/src/agents/incidentContext";
 import { logger } from "@/src/lib/logger";
 import { buildIncidentChannelName } from "@/src/lib/utils";
 import {
@@ -28,8 +29,14 @@ async function postActionError(
   channelId: string,
   title: string,
   message: string,
+  threadTs?: string,
 ): Promise<void> {
-  await postMessage(channelId, actionErrorBlocks(title, message), `OpsPilot: ${title}`);
+  await postMessage(
+    channelId,
+    actionErrorBlocks(title, message),
+    `OpsPilot: ${title}`,
+    threadTs,
+  );
 }
 
 function formatChannelError(error: unknown): string {
@@ -69,6 +76,7 @@ export async function handleCreateIncidentChannel(
       payload.context.channelId,
       "Incident channel was not created",
       formatChannelError(error),
+      payload.context.threadTs,
     );
     return;
   }
@@ -110,6 +118,7 @@ export async function handleCreateIncidentChannel(
       payload.context.channelId,
       "Incident channel needs attention",
       `${formatChannelReference(incidentChannel.id)} exists, but OpsPilot could not post the kickoff. Invite the app to the channel and confirm it has \`chat:write\`.`,
+      payload.context.threadTs,
     );
     return;
   }
@@ -122,6 +131,7 @@ export async function handleCreateIncidentChannel(
       incidentChannel.reused,
     ),
     `Incident channel ${incidentChannel.name} is ready`,
+    payload.context.threadTs,
   );
 
   if (inviteFailed) {
@@ -129,6 +139,7 @@ export async function handleCreateIncidentChannel(
       payload.context.channelId,
       "Responder invitation needs attention",
       `The channel was prepared, but Slack did not allow OpsPilot to invite every responder. The requester is mentioned in ${formatChannelReference(incidentChannel.id)}; verify \`channels:manage\` and invite them manually if needed.`,
+      payload.context.threadTs,
     );
   }
 }
@@ -139,15 +150,28 @@ export async function handleGeneratePostmortem(payload: IncidentActionPayload): 
     payload.context.channelId,
     postmortemDraftBlocks(investigation),
     `Postmortem draft for ${investigation.id}`,
+    payload.context.threadTs,
   );
 }
 
 export async function handleMarkResolved(payload: IncidentActionPayload): Promise<void> {
   const investigation = await investigateIncidentDeterministically(investigationPrompt(payload));
+  const activeContext = payload.context.teamId
+    ? updateActiveIncidentStatus(
+        payload.context.teamId,
+        payload.context.channelId,
+        "resolved",
+      )
+    : null;
+  const resolvedInvestigation = activeContext?.investigation ?? {
+    ...investigation,
+    status: "resolved" as const,
+  };
   await postMessage(
     payload.context.channelId,
-    resolvedStatusBlocks(investigation, payload.actorUserId),
-    `${investigation.id} resolved`,
+    resolvedStatusBlocks(resolvedInvestigation, payload.actorUserId),
+    `${resolvedInvestigation.id} resolved`,
+    payload.context.threadTs,
   );
 }
 

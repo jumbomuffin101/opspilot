@@ -8,7 +8,7 @@ OpsPilot separates Slack transport, evidence collection, reasoning, and presenta
 flowchart TB
     subgraph Slack["Slack interface"]
         User["Responder"]
-        Command["/opspilot investigate"]
+        Command["@OpsPilot or /opspilot"]
         Ack["Immediate Block Kit acknowledgement"]
         Result["Incident brief"]
         Actions["Interactive actions"]
@@ -16,8 +16,11 @@ flowchart TB
 
     subgraph App["Next.js on Vercel"]
         CommandRoute["POST /api/slack/commands"]
+        EventsRoute["POST /api/slack/events"]
         ActionRoute["POST /api/slack/actions"]
         Verify["HMAC signature verification"]
+        IntentRouter["Intent Router"]
+        Context["In-memory IncidentContext"]
         Agent["Incident Agent"]
         Aggregator["Evidence Aggregator"]
         Registry["Tool Registry"]
@@ -43,6 +46,7 @@ flowchart TB
     end
 
     User --> Command --> CommandRoute --> Verify
+    Command --> EventsRoute --> Verify
     Verify --> Ack --> User
     Verify --> Agent --> Aggregator --> Registry
     Registry --> SlackTool
@@ -64,6 +68,9 @@ flowchart TB
     Deterministic --> Blocks
     Blocks --> Result --> User
     User --> Actions --> ActionRoute --> Verify
+    EventsRoute --> IntentRouter
+    IntentRouter --> Context
+    Context --> Agent
 ```
 
 ## Slack command flow
@@ -75,6 +82,16 @@ flowchart TB
 5. The final Block Kit brief is posted through `chat.postMessage`.
 
 Slash-command payloads do not provide the acknowledgement message timestamp. Because a reliable `thread_ts` is unavailable, the final result is posted to the originating channel. Threading would require changing the delivery model to create and retain the initial Web API message timestamp.
+
+## Conversational mention flow
+
+1. Slack sends a signed `app_mention` event to `POST /api/slack/events`.
+2. The route validates the raw request signature, handles URL verification, suppresses duplicate event IDs, and returns `200` immediately.
+3. Processing continues through Next.js `after()`, and responses use `event.thread_ts` or the mention's `ts` as the thread root.
+4. A deterministic intent router recognizes investigate, summarize, explain, status, timeline, owner, deployments, evidence, postmortem, resolve, and help requests.
+5. Investigations call the existing incident agent and store an `IncidentContext` keyed by workspace and channel. Follow-up intents render focused views of that same investigation.
+
+The context store is bounded to 100 entries with a 12-hour TTL. It uses process memory for this stage, so production continuity across cold starts requires a shared durable store.
 
 ## Tool orchestration flow
 

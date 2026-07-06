@@ -68,6 +68,7 @@ export async function postMessage(
   channel: string,
   blocks: KnownBlock[],
   fallbackText = "OpsPilot incident update",
+  threadTs?: string,
 ): Promise<void> {
   await callSlackApi<SlackApiResponse>("chat.postMessage", {
     channel,
@@ -75,6 +76,7 @@ export async function postMessage(
     blocks,
     unfurl_links: false,
     unfurl_media: false,
+    ...(threadTs ? { thread_ts: threadTs, reply_broadcast: false } : {}),
   });
 }
 

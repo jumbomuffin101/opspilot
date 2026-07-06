@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 
 import { investigateIncident } from "@/src/agents/incidentAgent";
+import { setActiveIncidentContext } from "@/src/agents/incidentContext";
 import { logger } from "@/src/lib/logger";
 import {
   investigationErrorBlocks,
@@ -41,6 +42,7 @@ function parsePayload(rawBody: string): SlackSlashCommandPayload | null {
 }
 
 async function postInvestigation(
+  teamId: string,
   channelId: string,
   issueText: string,
   requesterId: string,
@@ -49,7 +51,18 @@ async function postInvestigation(
 
   try {
     const investigation = await investigateIncident(issueText);
-    blocks = investigationResultBlocks(investigation, { channelId, requesterId });
+    setActiveIncidentContext({
+      teamId,
+      channelId,
+      requesterId,
+      issueText,
+      investigation,
+    });
+    blocks = investigationResultBlocks(investigation, {
+      channelId,
+      teamId,
+      requesterId,
+    });
   } catch (error) {
     logger.error("Incident investigation failed", {
       channelId,
@@ -96,7 +109,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return slackResponse(usageBlocks());
   }
 
-  after(() => postInvestigation(payload.channelId, command.issueText, payload.userId));
+  after(() =>
+    postInvestigation(
+      payload.teamId,
+      payload.channelId,
+      command.issueText,
+      payload.userId,
+    ),
+  );
 
   return slackResponse(
     investigationStartedBlocks(command.issueText, payload.userId),
