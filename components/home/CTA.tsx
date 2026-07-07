@@ -14,17 +14,11 @@ export function CTA() {
             Ready to modernize incident response?
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">
-            Give engineering teams evidence, coordination, and follow-through from the
-            Slack workspace they already share.
+            Install OpsPilot into Slack, connect project context once, and give engineers
+            evidence, coordination, and follow-through where they already work.
           </p>
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
             <AddToSlackButton />
-            <a
-              href="/setup"
-              className="inline-flex min-h-12 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:-translate-y-0.5 hover:border-cyan-200/30 hover:bg-cyan-300/15 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-200 sm:text-base"
-            >
-              Configure Project
-            </a>
             <a
               href={GITHUB_URL}
               target="_blank"

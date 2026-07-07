@@ -40,10 +40,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     typeof payload.workspace_name === "string" && payload.workspace_name.trim()
       ? payload.workspace_name.trim().slice(0, 120)
       : undefined;
-  const defaultService =
-    typeof payload.default_service === "string" && payload.default_service.trim()
-      ? payload.default_service.trim().slice(0, 120)
-      : undefined;
+  const defaultService = cleanString(payload.default_service);
   const deploymentProvider =
     typeof payload.deployment_provider === "string"
       ? normalizeDeploymentProvider(payload.deployment_provider)
@@ -56,6 +53,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
   if (!githubRepo) {
     return NextResponse.json({ error: "GitHub repo is required" }, { status: 400 });
+  }
+  if (!defaultService) {
+    return NextResponse.json({ error: "Default service name is required" }, { status: 400 });
   }
   if (!deploymentProvider) {
     return NextResponse.json({ error: "Deployment provider is invalid" }, { status: 400 });

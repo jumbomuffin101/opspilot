@@ -21,10 +21,8 @@ interface SetupProjectFormProps {
   initialConfig?: SafeProjectConfig | null;
 }
 
-function defaultServicePaths(service?: string): ServicePathMapping {
-  return service
-    ? { [service]: [`services/${service}`, `apps/${service}`] }
-    : { "checkout-api": ["services/checkout-api", "apps/checkout"] };
+function defaultServicePaths(service: string): ServicePathMapping {
+  return { [service]: [`services/${service}`, `apps/${service}`] };
 }
 
 function prettyJson(value: unknown): string {
@@ -47,7 +45,7 @@ export function SetupProjectForm({
   const [deploymentProvider, setDeploymentProvider] = useState<DeploymentProvider>(
     initialConfig?.deploymentProvider ?? "mock",
   );
-  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [message, setMessage] = useState<string>(
     initialConfig ? "Existing project configuration loaded." : "",
   );
@@ -83,8 +81,7 @@ export function SetupProjectForm({
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Project setup failed");
 
-      setStatus("saved");
-      setMessage("Project configuration saved. You can now use @OpsPilot in Slack.");
+      window.location.assign(`/setup/success?team_id=${encodeURIComponent(teamId)}`);
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "Project setup failed");
@@ -96,12 +93,17 @@ export function SetupProjectForm({
   const labelClass = "text-sm font-medium text-slate-200";
 
   return (
-    <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+    <form onSubmit={handleSubmit} className="mt-8 space-y-6">
       <input type="hidden" name="team_id" value={teamId} />
+
+      <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm leading-6 text-cyan-100/85">
+        OpsPilot uses this repository to inspect recent commits, changed files, and
+        service-specific paths during incident investigations.
+      </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <label className={labelClass}>
-          GitHub owner
+          GitHub owner <span className="text-cyan-200">*</span>
           <input
             required
             className={inputClass}
@@ -112,7 +114,7 @@ export function SetupProjectForm({
         </label>
 
         <label className={labelClass}>
-          GitHub repo
+          GitHub repo <span className="text-cyan-200">*</span>
           <input
             required
             className={inputClass}
@@ -124,59 +126,99 @@ export function SetupProjectForm({
       </div>
 
       <label className={labelClass}>
-        Default service name
+        Default service name <span className="text-cyan-200">*</span>
         <input
+          required
           className={inputClass}
           placeholder="checkout-api"
           value={defaultService}
-          onChange={(event) => setDefaultService(event.target.value)}
+          onChange={(event) => {
+            const nextService = event.target.value;
+            setDefaultService(nextService);
+            if (!initialConfig && nextService.trim()) {
+              setServicePaths(prettyJson(defaultServicePaths(nextService.trim())));
+            }
+          }}
         />
+        <span className="mt-2 block text-xs leading-5 text-slate-500">
+          This is the service OpsPilot should assume when an incident report is ambiguous.
+        </span>
       </label>
 
-      <label className={labelClass}>
-        Service path mapping JSON
-        <textarea
-          className={`${inputClass} min-h-40 font-mono leading-6`}
-          value={servicePaths}
-          onChange={(event) => setServicePaths(event.target.value)}
-          spellCheck={false}
-        />
-      </label>
+      <details className="rounded-2xl border border-white/10 bg-black/20 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-200">
+          Advanced project settings
+        </summary>
 
-      <label className={labelClass}>
-        Deployment provider
-        <select
-          className={inputClass}
-          value={deploymentProvider}
-          onChange={(event) => setDeploymentProvider(event.target.value as DeploymentProvider)}
-        >
-          {DEPLOYMENT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value} className="bg-slate-950 text-white">
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+        <div className="mt-5 space-y-5">
+          <label className={labelClass}>
+            Service path mapping JSON
+            <textarea
+              className={`${inputClass} min-h-40 font-mono leading-6`}
+              value={servicePaths}
+              onChange={(event) => setServicePaths(event.target.value)}
+              spellCheck={false}
+            />
+            <span className="mt-2 block text-xs leading-5 text-slate-500">
+              Map service names to repository paths. Example:{" "}
+              <span className="font-mono text-slate-400">
+                {JSON.stringify({ "checkout-api": ["services/checkout-api"] })}
+              </span>
+            </span>
+          </label>
+
+          <label className={labelClass}>
+            Deployment provider
+            <select
+              className={inputClass}
+              value={deploymentProvider}
+              onChange={(event) => setDeploymentProvider(event.target.value as DeploymentProvider)}
+            >
+              {DEPLOYMENT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value} className="bg-slate-950 text-white">
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </details>
+
+      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-4">
+        <div className="flex items-start gap-3">
+          <span className="mt-1 size-2 rounded-full bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.55)]" />
+          <div>
+            <p className="text-sm font-semibold text-slate-200">
+              GitHub access uses deployment credentials
+            </p>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              GitHub access currently uses the server-side GitHub token configured by the
+              OpsPilot deployment. No GitHub token is stored in this setup flow.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4">
+        <p className="text-sm font-semibold text-slate-300">Connect GitHub OAuth</p>
+        <p className="mt-1 text-sm leading-6 text-slate-500">
+          Coming soon: allow each workspace to securely authorize its own repositories.
+        </p>
+      </div>
 
       <div className="flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
         <p
-          className={`text-sm ${
-            status === "error"
-              ? "text-red-300"
-              : status === "saved"
-                ? "text-emerald-300"
-                : "text-slate-500"
-          }`}
+          className={`text-sm ${status === "error" ? "text-red-300" : "text-slate-500"}`}
           role="status"
         >
-          {message || "No GitHub token is stored here; repository access still uses server env configuration."}
+          {message || "Save this project context to finish onboarding."}
         </p>
         <button
           disabled={status === "saving"}
           type="submit"
           className="inline-flex min-h-12 items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {status === "saving" ? "Saving..." : "Save Project"}
+          {status === "saving" ? "Saving..." : "Finish Setup"}
         </button>
       </div>
     </form>

@@ -3,27 +3,27 @@ import { SectionHeading } from "@/components/home/SectionHeading";
 const steps = [
   {
     number: "01",
-    title: "Install OpsPilot into Slack",
-    copy: "Connect the agent to the workspace where engineering incidents already unfold.",
-    detail: "One workspace installation",
+    title: "Add OpsPilot to Slack",
+    copy: "Install the Slack-native incident commander into the workspace where response work already happens.",
+    detail: "One Add to Slack flow",
   },
   {
     number: "02",
-    title: "Connect GitHub context",
-    copy: "Configure the repository, default service, and service path mapping once after installation.",
-    detail: "Owner · repo · service paths",
+    title: "Connect your project",
+    copy: "Choose the GitHub owner, repo, default service, and service paths OpsPilot should use for investigations.",
+    detail: "GitHub owner · repo · service map",
   },
   {
     number: "03",
-    title: "Mention OpsPilot",
-    copy: "Ask in natural language from the channel where the first signal appears.",
-    detail: "@OpsPilot investigate checkout failures",
+    title: "Use OpsPilot inside Slack",
+    copy: "Start from a mention or slash command in the channel where the first signal appears.",
+    detail: "@OpsPilot investigate checkout failures\n/opspilot investigate checkout API is failing",
   },
   {
     number: "04",
-    title: "Coordinate the response",
-    copy: "OpsPilot gathers evidence, creates incident channels, drafts postmortems, and tracks resolution.",
-    detail: "GitHub · Slack · Deployments · Incident history",
+    title: "Coordinate response",
+    copy: "Create incident channels, generate postmortems, and resolve incidents from interactive Slack workflows.",
+    detail: "Channels · postmortems · resolution",
   },
 ] as const;
 
@@ -33,8 +33,8 @@ export function HowItWorks() {
       <div className="mx-auto max-w-7xl px-5 py-24 sm:px-6 lg:px-8 lg:py-32">
         <SectionHeading
           eyebrow="How it works"
-          title="Install once. Respond together."
-          description="OpsPilot turns the Slack conversation into the incident operating system—without asking engineers to adopt another dashboard."
+          title="One install flow. Slack stays the interface."
+          description="OpsPilot installs into Slack, collects your project context during setup, and then works where engineers already coordinate incidents."
         />
 
         <ol className="relative mt-14 grid gap-4 lg:grid-cols-4">
@@ -47,7 +47,7 @@ export function HowItWorks() {
                 </div>
                 <h3 className="mt-10 text-lg font-semibold text-white">{step.title}</h3>
                 <p className="mt-3 text-sm leading-6 text-slate-400">{step.copy}</p>
-                <p className="mt-6 border-t border-white/[.07] pt-4 font-mono text-[11px] leading-5 text-slate-500">
+                <p className="mt-6 whitespace-pre-line border-t border-white/[.07] pt-4 font-mono text-[11px] leading-5 text-slate-500">
                   {step.detail}
                 </p>
               </article>

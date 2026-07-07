@@ -35,16 +35,9 @@ export function Hero() {
           </span>
           Watch Demo
         </a>
-        <a
-          href="/setup"
-          className="inline-flex min-h-12 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:-translate-y-0.5 hover:border-cyan-200/30 hover:bg-cyan-300/15 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-200 sm:text-base"
-        >
-          Configure Project
-        </a>
       </div>
-      <p className="mt-6 text-sm text-slate-500">
-        Add to Slack → connect GitHub repo → use{" "}
-        <span className="font-mono text-slate-300">@OpsPilot</span> inside Slack.
+      <p className="mt-5 text-sm text-slate-500">
+        Install OpsPilot in Slack, then connect your GitHub project during setup.
       </p>
     </section>
   );

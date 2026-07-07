@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { BrandMark } from "@/components/home/BrandMark";
 import { SetupProjectForm } from "@/app/setup/SetupProjectForm";
+import { BrandMark } from "@/components/home/BrandMark";
 import { getSafeProjectConfigByTeam } from "@/src/config/projectConfigStore";
 import { getInstallationByTeam } from "@/src/slack/installationStore";
 
@@ -37,14 +37,14 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
         <div className="mt-10 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[.035] shadow-2xl shadow-black/30">
           <div className="border-b border-white/10 bg-white/[.035] px-6 py-7 sm:px-8">
             <p className="font-mono text-xs uppercase tracking-[.22em] text-cyan-200">
-              Workspace setup
+              Step 2 of 2 · Project setup
             </p>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-.045em] sm:text-5xl">
-              Connect OpsPilot to your project context.
+              Set up your project context
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-400">
-              Add the GitHub repository and service mapping OpsPilot should use when
-              engineers mention it inside Slack.
+              Connect the repository and service map OpsPilot should use when investigating
+              incidents from Slack.
             </p>
           </div>
 
@@ -86,8 +86,8 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
               <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 p-5">
                 <h2 className="text-lg font-semibold text-amber-100">Missing Slack team ID</h2>
                 <p className="mt-2 text-sm leading-6 text-amber-100/75">
-                  Open this page from the Slack OAuth redirect or include a
-                  <span className="font-mono"> team_id</span> query parameter.
+                  Open setup from the Slack OAuth redirect. OpsPilot needs the workspace
+                  team ID before saving project context.
                 </p>
                 <a
                   href="/api/slack/install"

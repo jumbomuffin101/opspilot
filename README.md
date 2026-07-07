@@ -28,6 +28,21 @@ For judging, set `DEMO_MODE=true`. The checkout scenario then uses deterministic
 
 See the complete [three-minute demo script](docs/demo-script.md).
 
+## SaaS onboarding flow
+
+OpsPilot has a single product onboarding path:
+
+```text
+Add to Slack
+→ Slack OAuth
+→ Project setup
+→ Use OpsPilot in Slack
+```
+
+After installation, users are redirected to `/setup?team_id=...` to connect project context. After saving GitHub owner, repo, default service, service paths, and deployment provider, users land on `/setup/success?team_id=...` with example Slack commands.
+
+Slack OAuth and project configuration are implemented. Per-workspace GitHub OAuth is intentionally not implemented yet; the setup UI shows this as future work. Current GitHub repository access uses the server-side `GITHUB_TOKEN` configured by the OpsPilot deployment.
+
 ### Conversational intents
 
 | Intent | Example |
@@ -104,6 +119,7 @@ app/
   api/slack/install/      Slack OAuth install redirect
   api/slack/oauth/        Slack OAuth callback
   setup/                  Post-install project setup page
+  setup/success/          Onboarding completion page
   page.tsx                Submission landing page
 db/
   migrations/             PostgreSQL schema migrations
@@ -282,7 +298,7 @@ After Slack OAuth succeeds, OpsPilot redirects to:
 /setup?team_id=<slack-team-id>
 ```
 
-The setup page stores workspace project context:
+The setup page is a guided onboarding step. It stores workspace project context:
 
 - GitHub owner
 - GitHub repo
@@ -297,6 +313,14 @@ POST /api/setup/project
 ```
 
 No GitHub token is stored in this setup flow. Repository access still uses the server-side `GITHUB_TOKEN`. When a Slack team has project config, the GitHub tool uses that workspace's `github_owner` and `github_repo`; otherwise it falls back to `GITHUB_OWNER` and `GITHUB_REPO`.
+
+After a successful save, the browser redirects to:
+
+```text
+/setup/success?team_id=<slack-team-id>
+```
+
+The success page confirms the workspace, connected repository, default service, and example Slack commands. A GitHub OAuth card is shown as coming soon so the current security model is explicit.
 
 ## Demo mode and production fallbacks
 
@@ -316,6 +340,8 @@ Outside demo mode, missing configuration, timeouts, rate limits, malformed respo
 ### GitHub
 
 Set `DEMO_MODE=false` and `GITHUB_TOKEN`. Fine-grained tokens need **Contents: read** for the selected repository. Workspace project config supplies `github_owner` and `github_repo` after setup; `GITHUB_OWNER` and `GITHUB_REPO` remain global fallbacks. OpsPilot retrieves ten commits and enriches the newest three with changed files when available.
+
+Per-workspace GitHub OAuth is future work. Until then, repository reads use the deployment's server-side `GITHUB_TOKEN`; the setup page never asks users for a GitHub token.
 
 ### Slack Real-Time Search-ready adapter
 
