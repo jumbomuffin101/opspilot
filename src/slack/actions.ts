@@ -1,5 +1,8 @@
 import { investigateIncidentDeterministically } from "@/src/agents/incidentAgent";
-import { updateActiveIncidentStatus } from "@/src/agents/incidentContext";
+import {
+  getIncidentContext,
+  updateIncidentStatus,
+} from "@/src/agents/persistentIncidentStore";
 import { logger } from "@/src/lib/logger";
 import { buildIncidentChannelName } from "@/src/lib/utils";
 import {
@@ -18,11 +21,29 @@ import {
   SlackApiError,
 } from "@/src/slack/client";
 import type { IncidentActionPayload } from "@/src/types/slack";
+import type { IncidentInvestigation } from "@/src/types/incident";
 
 function investigationPrompt(payload: IncidentActionPayload): string {
   return payload.context.service === "checkout-api"
     ? "checkout API returning HTTP 500 after deployment"
     : payload.context.title;
+}
+
+async function resolveInvestigation(
+  payload: IncidentActionPayload,
+): Promise<IncidentInvestigation> {
+  if (payload.context.teamId) {
+    const context = await getIncidentContext(
+      payload.context.teamId,
+      payload.context.channelId,
+      payload.context.threadTs,
+    );
+    if (context?.investigation.id === payload.context.incidentId) {
+      return context.investigation;
+    }
+  }
+
+  return investigateIncidentDeterministically(investigationPrompt(payload));
 }
 
 async function postActionError(
@@ -58,7 +79,7 @@ function formatChannelError(error: unknown): string {
 export async function handleCreateIncidentChannel(
   payload: IncidentActionPayload,
 ): Promise<void> {
-  const investigation = await investigateIncidentDeterministically(investigationPrompt(payload));
+  const investigation = await resolveInvestigation(payload);
   const channelName = buildIncidentChannelName(
     payload.context.service,
     investigation.timeline[0]?.timestamp ?? investigation.nextUpdateDue,
@@ -145,7 +166,7 @@ export async function handleCreateIncidentChannel(
 }
 
 export async function handleGeneratePostmortem(payload: IncidentActionPayload): Promise<void> {
-  const investigation = await investigateIncidentDeterministically(investigationPrompt(payload));
+  const investigation = await resolveInvestigation(payload);
   await postMessage(
     payload.context.channelId,
     postmortemDraftBlocks(investigation),
@@ -155,11 +176,12 @@ export async function handleGeneratePostmortem(payload: IncidentActionPayload): 
 }
 
 export async function handleMarkResolved(payload: IncidentActionPayload): Promise<void> {
-  const investigation = await investigateIncidentDeterministically(investigationPrompt(payload));
+  const investigation = await resolveInvestigation(payload);
   const activeContext = payload.context.teamId
-    ? updateActiveIncidentStatus(
+    ? await updateIncidentStatus(
         payload.context.teamId,
         payload.context.channelId,
+        payload.context.incidentId,
         "resolved",
       )
     : null;

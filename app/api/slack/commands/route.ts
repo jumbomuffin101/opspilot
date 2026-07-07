@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 
 import { investigateIncident } from "@/src/agents/incidentAgent";
-import { setActiveIncidentContext } from "@/src/agents/incidentContext";
+import { saveIncidentContext } from "@/src/agents/persistentIncidentStore";
 import { logger } from "@/src/lib/logger";
 import {
   investigationErrorBlocks,
@@ -51,7 +51,7 @@ async function postInvestigation(
 
   try {
     const investigation = await investigateIncident(issueText);
-    setActiveIncidentContext({
+    await saveIncidentContext({
       teamId,
       channelId,
       requesterId,

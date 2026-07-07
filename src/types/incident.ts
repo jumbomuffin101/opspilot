@@ -144,3 +144,13 @@ export interface IncidentContext {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface IncidentMemorySummary {
+  incidentId: string;
+  title: string;
+  service: string;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  createdAt: string;
+  updatedAt: string;
+}

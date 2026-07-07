@@ -12,6 +12,7 @@ export const ENVIRONMENT_KEYS = {
   openAiApiKey: "OPENAI_API_KEY",
   openAiModel: "OPENAI_MODEL",
   demoMode: "DEMO_MODE",
+  databaseUrl: "DATABASE_URL",
   githubToken: "GITHUB_TOKEN",
   githubOwner: "GITHUB_OWNER",
   githubRepo: "GITHUB_REPO",

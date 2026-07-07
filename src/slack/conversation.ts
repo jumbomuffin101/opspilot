@@ -1,9 +1,9 @@
 import { investigateIncident } from "@/src/agents/incidentAgent";
 import {
-  getActiveIncidentContext,
-  setActiveIncidentContext,
-  updateActiveIncidentStatus,
-} from "@/src/agents/incidentContext";
+  getLatestIncidentContext,
+  saveIncidentContext,
+  updateIncidentStatus,
+} from "@/src/agents/persistentIncidentStore";
 import { routeConversationalIntent } from "@/src/agents/intentRouter";
 import { logger } from "@/src/lib/logger";
 import {
@@ -63,7 +63,7 @@ async function investigateFromConversation(
 
   try {
     const investigation = await investigateIncident(issueText);
-    setActiveIncidentContext({
+    await saveIncidentContext({
       teamId: request.teamId,
       channelId: request.channelId,
       threadTs: request.threadTs,
@@ -116,7 +116,7 @@ export async function handleConversationalRequest(
     return;
   }
 
-  const context = getActiveIncidentContext(request.teamId, request.channelId);
+  const context = await getLatestIncidentContext(request.teamId, request.channelId);
   if (!context) {
     await reply(
       request,
@@ -185,9 +185,10 @@ export async function handleConversationalRequest(
       );
       return;
     case "resolve": {
-      const resolvedContext = updateActiveIncidentStatus(
+      const resolvedContext = await updateIncidentStatus(
         request.teamId,
         request.channelId,
+        investigation.id,
         "resolved",
       );
       const resolvedInvestigation = resolvedContext?.investigation ?? {

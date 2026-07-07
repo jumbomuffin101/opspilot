@@ -57,6 +57,7 @@ See the complete [three-minute demo script](docs/demo-script.md).
 - Polished Block Kit incident briefs and actionable incident-workflow buttons
 - Incident channel creation, response checklist, postmortem draft, and resolution update
 - Demo mode that makes the primary checkout outage path fully deterministic
+- Durable incident memory with PostgreSQL and in-memory fallback
 - Vercel-compatible Next.js App Router deployment and `/api/health` endpoint
 
 ## Architecture
@@ -80,10 +81,12 @@ flowchart LR
     AI --> B["Block Kit incident brief"]
     F --> B
     B --> U
+    B --> M["Persistent incident memory"]
     U --> X["Interactive actions"]
     X --> W["Incident room / postmortem / resolution"]
     B --> Q["Conversational follow-up"]
-    Q --> I
+    Q --> M
+    M --> I
 ```
 
 The agent receives only normalized `InvestigationEvidence`; it does not depend on provider response shapes. Replacing a mock provider changes a tool or service adapter, not the incident reasoning or Slack UI. See [docs/architecture.md](docs/architecture.md) for the full flow.
@@ -93,10 +96,13 @@ The agent receives only normalized `InvestigationEvidence`; it does not depend o
 ```text
 app/
   api/health/             Runtime health endpoint
+  api/incidents/          Recent incident memory endpoint
   api/slack/commands/     Slash-command endpoint
   api/slack/events/       App-mention Events API endpoint
   api/slack/actions/      Interactivity endpoint
   page.tsx                Submission landing page
+db/
+  migrations/             PostgreSQL schema migrations
 docs/                     Architecture, Devpost copy, and demo script
 src/
   agents/                 Context, intent routing, aggregation, and reasoning
@@ -116,6 +122,7 @@ src/
 - Tailwind CSS 4
 - OpenAI Responses API with JSON Schema output
 - GitHub REST API
+- PostgreSQL via `pg`
 - Vercel Functions
 
 ## Local development
@@ -151,6 +158,7 @@ npm run build
 | `OPENAI_API_KEY` | AI only | Enables structured AI reasoning outside demo mode |
 | `OPENAI_MODEL` | No | Model override; defaults to `gpt-4o-mini` |
 | `DEMO_MODE` | Recommended | `true` forces deterministic evidence and reasoning |
+| `DATABASE_URL` | No | PostgreSQL connection string for persistent incident memory |
 | `GITHUB_TOKEN` | GitHub only | Token with repository Contents read access |
 | `GITHUB_OWNER` | GitHub only | Repository account or organization |
 | `GITHUB_REPO` | GitHub only | Repository name without `.git` |
@@ -158,6 +166,51 @@ npm run build
 | `NEXT_PUBLIC_SLACK_INSTALL_URL` | No | Public Slack OAuth install URL; shows Developer Preview when unset |
 
 Never expose server tokens through `NEXT_PUBLIC_*` variables.
+
+## Persistent incident memory
+
+OpsPilot stores the active incident context for follow-up mentions, Slack button actions, recent incident visibility, and serverless continuity.
+
+When `DATABASE_URL` is configured, OpsPilot uses PostgreSQL. When `DATABASE_URL` is missing or a database operation fails, OpsPilot logs a concise warning and falls back to the existing 12-hour in-memory store. Demo mode does not require a database.
+
+### Local PostgreSQL setup
+
+1. Create a local PostgreSQL database.
+2. Set `DATABASE_URL` in `.env.local`.
+3. Run the migration:
+
+   ```bash
+   psql "$DATABASE_URL" -f db/migrations/001_create_incidents.sql
+   ```
+
+4. Start the app:
+
+   ```bash
+   npm run dev
+   ```
+
+5. Verify memory health:
+
+   ```text
+   http://localhost:3000/api/health
+   ```
+
+The health response includes:
+
+```json
+{
+  "memory": "persistent",
+  "database": "connected"
+}
+```
+
+Recent incidents are available at:
+
+```text
+GET /api/incidents
+```
+
+The endpoint returns only safe summary fields: incident ID, title, service, severity, status, created time, and updated time. It does not expose full investigation JSON.
 
 ## Slack setup
 
@@ -223,17 +276,19 @@ Set `DEMO_MODE=false` and `OPENAI_API_KEY`. OpsPilot requests JSON Schema-constr
 
 1. Import the repository into Vercel.
 2. Keep the default Next.js build command: `npm run build`.
-3. Add the required environment variables for Preview and Production.
-4. Deploy and verify `https://<your-domain>/api/health`.
-5. Configure the deployed Slack command, Events API, and interactivity URLs.
-6. Reinstall the Slack app after any scope changes and run the demo command.
+3. Provision a PostgreSQL database, or leave `DATABASE_URL` unset for demo/in-memory mode.
+4. If using PostgreSQL, run `db/migrations/001_create_incidents.sql` against the database.
+5. Add the required environment variables for Preview and Production, including `DATABASE_URL` when persistent memory is enabled.
+6. Deploy and verify `https://<your-domain>/api/health`.
+7. Configure the deployed Slack command, Events API, and interactivity URLs.
+8. Reinstall the Slack app after any scope changes and run the demo command.
 
 All external clients are initialized at request time, so missing build-time secrets do not break static generation.
 
 ## Known limitations
 
 - App-mention responses and their button results are threaded. Slash-command payloads do not include an acknowledgement message timestamp, so slash-command results remain channel-level.
-- Active incident context is process memory with a 12-hour TTL and bounded capacity. It can be lost across cold starts or separate serverless instances; durable shared storage is required for production continuity.
+- Persistent incident memory requires running the SQL migration. Without `DATABASE_URL`, OpsPilot intentionally falls back to bounded 12-hour in-memory context.
 - Deployment evidence is currently deterministic mock data; no deployment-provider API is connected.
 - RTS credentials and action-token exchange depend on the production Slack installation model.
 - Buttons do not yet disable after use, so repeated actions are possible.
@@ -241,7 +296,7 @@ All external clients are initialized at request time, so missing build-time secr
 
 ## Future roadmap
 
-- Persist conversational incident state, action idempotency keys, and audit events
+- Add action idempotency keys and durable audit events
 - Add durable background execution and retry handling
 - Integrate a production deployment provider
 - Add workspace-specific RTS authorization and citation controls
