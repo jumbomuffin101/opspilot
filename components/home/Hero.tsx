@@ -27,14 +27,24 @@ export function Hero() {
           href="#demo"
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.045] px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[.08] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-300 sm:text-base"
         >
-          <span aria-hidden="true" className="grid size-5 place-items-center rounded-full border border-white/20 text-[9px]">
+          <span
+            aria-hidden="true"
+            className="grid size-5 place-items-center rounded-full border border-white/20 text-[9px]"
+          >
             ▶
           </span>
           Watch Demo
         </a>
+        <a
+          href="/setup"
+          className="inline-flex min-h-12 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:-translate-y-0.5 hover:border-cyan-200/30 hover:bg-cyan-300/15 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-200 sm:text-base"
+        >
+          Configure Project
+        </a>
       </div>
       <p className="mt-6 text-sm text-slate-500">
-        Install once. Mention <span className="font-mono text-slate-300">@OpsPilot</span> whenever an incident starts.
+        Add to Slack → connect GitHub repo → use{" "}
+        <span className="font-mono text-slate-300">@OpsPilot</span> inside Slack.
       </p>
     </section>
   );

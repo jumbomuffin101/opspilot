@@ -50,7 +50,7 @@ async function postInvestigation(
   let blocks: KnownBlock[];
 
   try {
-    const investigation = await investigateIncident(issueText);
+    const investigation = await investigateIncident(issueText, { teamId });
     await saveIncidentContext({
       teamId,
       channelId,
@@ -72,7 +72,7 @@ async function postInvestigation(
   }
 
   try {
-    await postMessage(channelId, blocks);
+    await postMessage(channelId, blocks, "OpsPilot incident update", undefined, teamId);
   } catch (error) {
     logger.error("Failed to post investigation result to Slack", {
       channelId,

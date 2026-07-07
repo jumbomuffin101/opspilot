@@ -43,7 +43,9 @@ async function resolveInvestigation(
     }
   }
 
-  return investigateIncidentDeterministically(investigationPrompt(payload));
+  return investigateIncidentDeterministically(investigationPrompt(payload), {
+    teamId: payload.context.teamId,
+  });
 }
 
 async function postActionError(
@@ -51,12 +53,14 @@ async function postActionError(
   title: string,
   message: string,
   threadTs?: string,
+  teamId?: string,
 ): Promise<void> {
   await postMessage(
     channelId,
     actionErrorBlocks(title, message),
     `OpsPilot: ${title}`,
     threadTs,
+    teamId,
   );
 }
 
@@ -87,7 +91,7 @@ export async function handleCreateIncidentChannel(
 
   let incidentChannel;
   try {
-    incidentChannel = await createChannel(channelName);
+    incidentChannel = await createChannel(channelName, payload.context.teamId);
   } catch (error) {
     logger.error("Failed to create or reuse an incident channel", {
       incidentId: payload.context.incidentId,
@@ -98,6 +102,7 @@ export async function handleCreateIncidentChannel(
       "Incident channel was not created",
       formatChannelError(error),
       payload.context.threadTs,
+      payload.context.teamId,
     );
     return;
   }
@@ -107,7 +112,7 @@ export async function handleCreateIncidentChannel(
   );
   let inviteFailed = false;
   try {
-    await inviteUsersToChannel(incidentChannel.id, invitees);
+    await inviteUsersToChannel(incidentChannel.id, invitees, payload.context.teamId);
   } catch (error) {
     inviteFailed = true;
     // Channel setup can continue because the kickoff explicitly mentions the requester.
@@ -123,11 +128,15 @@ export async function handleCreateIncidentChannel(
       incidentChannel.id,
       incidentKickoffBlocks(investigation, payload.context, payload.actorUserId),
       `${investigation.severity} incident kickoff: ${investigation.title}`,
+      undefined,
+      payload.context.teamId,
     );
     await postMessage(
       incidentChannel.id,
       incidentChecklistBlocks(investigation),
       "OpsPilot initial response checklist",
+      undefined,
+      payload.context.teamId,
     );
   } catch (error) {
     logger.error("Incident channel is available, but kickoff messages could not be posted", {
@@ -140,6 +149,7 @@ export async function handleCreateIncidentChannel(
       "Incident channel needs attention",
       `${formatChannelReference(incidentChannel.id)} exists, but OpsPilot could not post the kickoff. Invite the app to the channel and confirm it has \`chat:write\`.`,
       payload.context.threadTs,
+      payload.context.teamId,
     );
     return;
   }
@@ -153,6 +163,7 @@ export async function handleCreateIncidentChannel(
     ),
     `Incident channel ${incidentChannel.name} is ready`,
     payload.context.threadTs,
+    payload.context.teamId,
   );
 
   if (inviteFailed) {
@@ -161,6 +172,7 @@ export async function handleCreateIncidentChannel(
       "Responder invitation needs attention",
       `The channel was prepared, but Slack did not allow OpsPilot to invite every responder. The requester is mentioned in ${formatChannelReference(incidentChannel.id)}; verify \`channels:manage\` and invite them manually if needed.`,
       payload.context.threadTs,
+      payload.context.teamId,
     );
   }
 }
@@ -172,6 +184,7 @@ export async function handleGeneratePostmortem(payload: IncidentActionPayload): 
     postmortemDraftBlocks(investigation),
     `Postmortem draft for ${investigation.id}`,
     payload.context.threadTs,
+    payload.context.teamId,
   );
 }
 
@@ -194,6 +207,7 @@ export async function handleMarkResolved(payload: IncidentActionPayload): Promis
     resolvedStatusBlocks(resolvedInvestigation, payload.actorUserId),
     `${resolvedInvestigation.id} resolved`,
     payload.context.threadTs,
+    payload.context.teamId,
   );
 }
 

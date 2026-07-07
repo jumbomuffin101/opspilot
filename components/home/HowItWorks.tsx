@@ -9,21 +9,21 @@ const steps = [
   },
   {
     number: "02",
+    title: "Connect GitHub context",
+    copy: "Configure the repository, default service, and service path mapping once after installation.",
+    detail: "Owner · repo · service paths",
+  },
+  {
+    number: "03",
     title: "Mention OpsPilot",
     copy: "Ask in natural language from the channel where the first signal appears.",
     detail: "@OpsPilot investigate checkout failures",
   },
   {
-    number: "03",
-    title: "OpsPilot gathers evidence",
-    copy: "Independent tools correlate operational context before reasoning begins.",
-    detail: "GitHub · Slack · Deployments · Incident history",
-  },
-  {
     number: "04",
     title: "Coordinate the response",
-    copy: "Create incident channels, assign owners, generate postmortems, and mark incidents resolved.",
-    detail: "One shared response loop",
+    copy: "OpsPilot gathers evidence, creates incident channels, drafts postmortems, and tracks resolution.",
+    detail: "GitHub · Slack · Deployments · Incident history",
   },
 ] as const;
 

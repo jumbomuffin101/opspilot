@@ -26,6 +26,10 @@ export const incidentAgent = {
 
 const evidenceAggregator = new EvidenceAggregator(createDefaultToolRegistry());
 
+interface IncidentInvestigationOptions {
+  teamId?: string;
+}
+
 const CHECKOUT_SCENARIO_SIGNALS = [
   /\bcheckout(?:-api)?\b/i,
   /\bhttp\s*500\b|\b500s?\b/i,
@@ -302,13 +306,17 @@ function buildGenericInvestigation(
   };
 }
 
-function buildInvestigationQuery(issueText: string): InvestigationQuery {
+function buildInvestigationQuery(
+  issueText: string,
+  options: IncidentInvestigationOptions = {},
+): InvestigationQuery {
   const checkoutScenario = isCheckoutApiScenario(issueText);
 
   return {
     issue: issueText,
     service: checkoutScenario ? "checkout-api" : "unknown-service",
     severity: checkoutScenario ? "SEV-1" : "SEV-3",
+    teamId: options.teamId,
   };
 }
 
@@ -323,14 +331,18 @@ function buildDeterministicInvestigation(
 
 export async function investigateIncidentDeterministically(
   issueText: string,
+  options: IncidentInvestigationOptions = {},
 ): Promise<IncidentInvestigation> {
-  const evidence = await evidenceAggregator.collect(buildInvestigationQuery(issueText));
+  const evidence = await evidenceAggregator.collect(buildInvestigationQuery(issueText, options));
   return buildDeterministicInvestigation(issueText, evidence);
 }
 
 /** Aggregates evidence, attempts AI reasoning, and always retains deterministic fallback. */
-export async function investigateIncident(issueText: string): Promise<IncidentInvestigation> {
-  const evidence = await evidenceAggregator.collect(buildInvestigationQuery(issueText));
+export async function investigateIncident(
+  issueText: string,
+  options: IncidentInvestigationOptions = {},
+): Promise<IncidentInvestigation> {
+  const evidence = await evidenceAggregator.collect(buildInvestigationQuery(issueText, options));
   if (isDemoMode()) {
     logger.info("Demo mode active: using deterministic incident reasoning", {
       source: "deterministic",

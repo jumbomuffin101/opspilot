@@ -97,9 +97,13 @@ The agent receives only normalized `InvestigationEvidence`; it does not depend o
 app/
   api/health/             Runtime health endpoint
   api/incidents/          Recent incident memory endpoint
+  api/setup/project/      Project configuration endpoint
   api/slack/commands/     Slash-command endpoint
   api/slack/events/       App-mention Events API endpoint
   api/slack/actions/      Interactivity endpoint
+  api/slack/install/      Slack OAuth install redirect
+  api/slack/oauth/        Slack OAuth callback
+  setup/                  Post-install project setup page
   page.tsx                Submission landing page
 db/
   migrations/             PostgreSQL schema migrations
@@ -152,6 +156,9 @@ npm run build
 | `SLACK_BOT_TOKEN` | Slack flow | Posts messages and manages incident channels |
 | `SLACK_SIGNING_SECRET` | Slack flow | Verifies command and interaction signatures |
 | `SLACK_APP_TOKEN` | No | Reserved for Slack Socket Mode |
+| `SLACK_CLIENT_ID` | OAuth install | Slack OAuth client ID for Add to Slack |
+| `SLACK_CLIENT_SECRET` | OAuth install | Slack OAuth client secret for token exchange |
+| `SLACK_REDIRECT_URI` | OAuth install | OAuth callback URL, usually `/api/slack/oauth/callback` |
 | `SLACK_RTS_ENABLED` | No | Enables configured Slack search when exactly `true` |
 | `SLACK_RTS_API_URL` | RTS only | Slack RTS or approved proxy endpoint |
 | `SLACK_RTS_TOKEN` | RTS only | Server-side bearer token for the RTS endpoint |
@@ -160,8 +167,8 @@ npm run build
 | `DEMO_MODE` | Recommended | `true` forces deterministic evidence and reasoning |
 | `DATABASE_URL` | No | PostgreSQL connection string for persistent incident memory |
 | `GITHUB_TOKEN` | GitHub only | Token with repository Contents read access |
-| `GITHUB_OWNER` | GitHub only | Repository account or organization |
-| `GITHUB_REPO` | GitHub only | Repository name without `.git` |
+| `GITHUB_OWNER` | GitHub fallback | Repository account or organization when no workspace config exists |
+| `GITHUB_REPO` | GitHub fallback | Repository name without `.git` when no workspace config exists |
 | `NEXT_PUBLIC_APP_URL` | Deployment | Public application URL |
 | `NEXT_PUBLIC_SLACK_INSTALL_URL` | No | Public Slack OAuth install URL; shows Developer Preview when unset |
 
@@ -177,10 +184,12 @@ When `DATABASE_URL` is configured, OpsPilot uses PostgreSQL. When `DATABASE_URL`
 
 1. Create a local PostgreSQL database.
 2. Set `DATABASE_URL` in `.env.local`.
-3. Run the migration:
+3. Run migrations in order:
 
    ```bash
    psql "$DATABASE_URL" -f db/migrations/001_create_incidents.sql
+   psql "$DATABASE_URL" -f db/migrations/002_create_slack_installations.sql
+   psql "$DATABASE_URL" -f db/migrations/003_create_project_configs.sql
    ```
 
 4. Start the app:
@@ -214,36 +223,80 @@ The endpoint returns only safe summary fields: incident ID, title, service, seve
 
 ## Slack setup
 
-1. Create a Slack app and install it to the demo workspace.
+1. Create a Slack app.
 2. Add bot scopes:
    - `commands`
    - `app_mentions:read`
    - `chat:write`
    - `channels:manage`
    - `channels:read`
+   - `groups:read`
+   - `users:read`
    - `chat:write.public` when posting to public channels the app has not joined
-3. Reinstall the app after changing scopes.
-4. Create `/opspilot` under **Slash Commands** with:
+3. Under **OAuth & Permissions**, set the redirect URL:
+
+   ```text
+   https://<your-domain>/api/slack/oauth/callback
+   ```
+
+4. Configure environment variables:
+   - `SLACK_CLIENT_ID`
+   - `SLACK_CLIENT_SECRET`
+   - `SLACK_REDIRECT_URI=https://<your-domain>/api/slack/oauth/callback`
+   - `SLACK_SIGNING_SECRET`
+
+5. The homepage **Add to Slack** button uses `NEXT_PUBLIC_SLACK_INSTALL_URL` when provided. Otherwise it links to:
+
+   ```text
+   https://<your-domain>/api/slack/install
+   ```
+
+6. Create `/opspilot` under **Slash Commands** with:
 
    ```text
    https://<your-domain>/api/slack/commands
    ```
 
-5. Enable **Interactivity & Shortcuts** with:
+7. Enable **Interactivity & Shortcuts** with:
 
    ```text
    https://<your-domain>/api/slack/actions
    ```
 
-6. Under **Event Subscriptions**, enable events and set the request URL to:
+8. Under **Event Subscriptions**, enable events and set the request URL to:
 
    ```text
    https://<your-domain>/api/slack/events
    ```
 
-7. Subscribe to the bot event `app_mention`.
-8. Reinstall the app, then configure `SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN`.
-9. For local Slack testing, expose `npm run dev` through an HTTPS tunnel and use that public URL.
+9. Subscribe to the bot event `app_mention`.
+10. Install through Add to Slack. OpsPilot stores the workspace bot token in `slack_installations`.
+11. For manual/demo installs, `SLACK_BOT_TOKEN` remains supported as a global fallback.
+12. For local Slack testing, expose `npm run dev` through an HTTPS tunnel and use that public URL.
+
+## Project setup flow
+
+After Slack OAuth succeeds, OpsPilot redirects to:
+
+```text
+/setup?team_id=<slack-team-id>
+```
+
+The setup page stores workspace project context:
+
+- GitHub owner
+- GitHub repo
+- Default service name
+- Service path mapping JSON
+- Deployment provider: Mock, Vercel, Render, or GitHub Actions
+
+Project setup posts to:
+
+```text
+POST /api/setup/project
+```
+
+No GitHub token is stored in this setup flow. Repository access still uses the server-side `GITHUB_TOKEN`. When a Slack team has project config, the GitHub tool uses that workspace's `github_owner` and `github_repo`; otherwise it falls back to `GITHUB_OWNER` and `GITHUB_REPO`.
 
 ## Demo mode and production fallbacks
 
@@ -262,7 +315,7 @@ Outside demo mode, missing configuration, timeouts, rate limits, malformed respo
 
 ### GitHub
 
-Set `DEMO_MODE=false`, `GITHUB_TOKEN`, `GITHUB_OWNER`, and `GITHUB_REPO`. Fine-grained tokens need **Contents: read** for the selected repository. OpsPilot retrieves ten commits and enriches the newest three with changed files when available.
+Set `DEMO_MODE=false` and `GITHUB_TOKEN`. Fine-grained tokens need **Contents: read** for the selected repository. Workspace project config supplies `github_owner` and `github_repo` after setup; `GITHUB_OWNER` and `GITHUB_REPO` remain global fallbacks. OpsPilot retrieves ten commits and enriches the newest three with changed files when available.
 
 ### Slack Real-Time Search-ready adapter
 
@@ -277,18 +330,22 @@ Set `DEMO_MODE=false` and `OPENAI_API_KEY`. OpsPilot requests JSON Schema-constr
 1. Import the repository into Vercel.
 2. Keep the default Next.js build command: `npm run build`.
 3. Provision a PostgreSQL database, or leave `DATABASE_URL` unset for demo/in-memory mode.
-4. If using PostgreSQL, run `db/migrations/001_create_incidents.sql` against the database.
-5. Add the required environment variables for Preview and Production, including `DATABASE_URL` when persistent memory is enabled.
+4. If using PostgreSQL, run migrations in order:
+   - `001_create_incidents.sql`
+   - `002_create_slack_installations.sql`
+   - `003_create_project_configs.sql`
+5. Add required environment variables for Preview and Production, including `DATABASE_URL`, Slack OAuth credentials, and `GITHUB_TOKEN` when production GitHub evidence is enabled.
 6. Deploy and verify `https://<your-domain>/api/health`.
-7. Configure the deployed Slack command, Events API, and interactivity URLs.
-8. Reinstall the Slack app after any scope changes and run the demo command.
+7. Configure the deployed Slack command, Events API, OAuth redirect, and interactivity URLs.
+8. Install through Add to Slack, complete `/setup`, and run the demo command.
 
 All external clients are initialized at request time, so missing build-time secrets do not break static generation.
 
 ## Known limitations
 
 - App-mention responses and their button results are threaded. Slash-command payloads do not include an acknowledgement message timestamp, so slash-command results remain channel-level.
-- Persistent incident memory requires running the SQL migration. Without `DATABASE_URL`, OpsPilot intentionally falls back to bounded 12-hour in-memory context.
+- Persistent incident memory, OAuth installation storage, and project setup require running all SQL migrations. Without `DATABASE_URL`, OpsPilot intentionally falls back to bounded 12-hour in-memory context and manual `SLACK_BOT_TOKEN` usage.
+- The setup page is intentionally lightweight and does not yet implement user authentication beyond possession of a Slack `team_id` link.
 - Deployment evidence is currently deterministic mock data; no deployment-provider API is connected.
 - RTS credentials and action-token exchange depend on the production Slack installation model.
 - Buttons do not yet disable after use, so repeated actions are possible.

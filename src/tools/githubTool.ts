@@ -201,9 +201,10 @@ async function fetchGitHubJson(url: string, token: string): Promise<unknown> {
   return response.json() as Promise<unknown>;
 }
 
-async function fetchRealCommits(query: InvestigationQuery): Promise<CommitSignal[]> {
-  const config = getGitHubServiceConfig();
-  if (!config) return [];
+async function fetchRealCommits(
+  query: InvestigationQuery,
+  config: NonNullable<Awaited<ReturnType<typeof getGitHubServiceConfig>>>,
+): Promise<CommitSignal[]> {
   const owner = encodeURIComponent(config.repository.owner);
   const repo = encodeURIComponent(config.repository.name);
   const listUrl = `${GITHUB_API_BASE_URL}/repos/${owner}/${repo}/commits?per_page=${COMMIT_LIMIT}`;
@@ -254,27 +255,38 @@ async function fetchRealCommits(query: InvestigationQuery): Promise<CommitSignal
   );
 }
 
-function shouldUseMockGitHub(): { useMock: boolean; reason?: string } {
+async function shouldUseMockGitHub(
+  query: InvestigationQuery,
+): Promise<{
+  useMock: boolean;
+  reason?: string;
+  config?: NonNullable<Awaited<ReturnType<typeof getGitHubServiceConfig>>>;
+}> {
   if (isDemoMode()) {
     return { useMock: true, reason: "demo_mode" };
   }
 
-  if (!getGitHubServiceConfig()) return { useMock: true, reason: "missing_configuration" };
-  return { useMock: false };
+  const config = await getGitHubServiceConfig(query.teamId);
+  if (!config) return { useMock: true, reason: "missing_configuration" };
+  return { useMock: false, config };
 }
 
 export class GitHubTool implements IncidentTool<GitHubToolResult> {
   readonly name = "github";
 
   async execute(query: InvestigationQuery): Promise<GitHubToolResult> {
-    const mode = shouldUseMockGitHub();
+    const mode = await shouldUseMockGitHub(query);
     if (mode.useMock) {
       logger.info("GitHubTool using mock commit signals", { reason: mode.reason });
       return { kind: "commits", commits: getMockCommits(query) };
     }
+    if (!mode.config) {
+      logger.info("GitHubTool using mock commit signals", { reason: "missing_configuration" });
+      return { kind: "commits", commits: getMockCommits(query) };
+    }
 
     try {
-      return { kind: "commits", commits: await fetchRealCommits(query) };
+      return { kind: "commits", commits: await fetchRealCommits(query, mode.config) };
     } catch (error) {
       const metadata: Record<string, unknown> = {
         error: (error instanceof Error ? error.message : String(error)).slice(0, 200),

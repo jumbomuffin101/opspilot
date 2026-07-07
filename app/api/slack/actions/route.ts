@@ -111,6 +111,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           ),
           "OpsPilot action failed",
           actionPayload.context.threadTs,
+          actionPayload.context.teamId,
         );
       } catch (notificationError) {
         logger.error("Failed to post Slack action error message", {

@@ -4,6 +4,7 @@ export interface InvestigationQuery {
   issue: string;
   service?: string;
   severity?: IncidentSeverity;
+  teamId?: string;
 }
 
 export interface IncidentTool<Result> {

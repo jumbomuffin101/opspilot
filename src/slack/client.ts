@@ -1,3 +1,4 @@
+import { getInstallationByTeam } from "@/src/slack/installationStore";
 import type { KnownBlock } from "@/src/types/slack";
 
 interface SlackApiResponse {
@@ -37,8 +38,10 @@ export class SlackApiError extends Error {
 async function callSlackApi<T extends SlackApiResponse>(
   method: string,
   body: Record<string, unknown>,
+  teamId?: string,
 ): Promise<T> {
-  const token = process.env.SLACK_BOT_TOKEN;
+  const installation = teamId ? await getInstallationByTeam(teamId) : null;
+  const token = installation?.botAccessToken ?? process.env.SLACK_BOT_TOKEN;
   if (!token) throw new SlackApiError(method, "missing_bot_token");
 
   const response = await fetch(`https://slack.com/api/${method}`, {
@@ -69,6 +72,7 @@ export async function postMessage(
   blocks: KnownBlock[],
   fallbackText = "OpsPilot incident update",
   threadTs?: string,
+  teamId?: string,
 ): Promise<void> {
   await callSlackApi<SlackApiResponse>("chat.postMessage", {
     channel,
@@ -77,32 +81,32 @@ export async function postMessage(
     unfurl_links: false,
     unfurl_media: false,
     ...(threadTs ? { thread_ts: threadTs, reply_broadcast: false } : {}),
-  });
+  }, teamId);
 }
 
-async function findChannelByName(name: string): Promise<SlackChannel | null> {
+async function findChannelByName(name: string, teamId?: string): Promise<SlackChannel | null> {
   const result = await callSlackApi<ListChannelsResponse>("conversations.list", {
     exclude_archived: true,
     limit: 200,
     types: "public_channel",
-  });
+  }, teamId);
 
   return result.channels?.find((channel) => channel.name === name) ?? null;
 }
 
-export async function createChannel(name: string): Promise<CreatedChannel> {
+export async function createChannel(name: string, teamId?: string): Promise<CreatedChannel> {
   try {
     const result = await callSlackApi<CreateChannelResponse>("conversations.create", {
       name,
       is_private: false,
-    });
+    }, teamId);
     if (!result.channel) throw new SlackApiError("conversations.create", "missing_channel");
 
     return { ...result.channel, reused: false };
   } catch (error) {
     if (!(error instanceof SlackApiError) || error.code !== "name_taken") throw error;
 
-    const existingChannel = await findChannelByName(name);
+    const existingChannel = await findChannelByName(name, teamId);
     if (!existingChannel) {
       throw new SlackApiError("conversations.create", "name_taken_but_channel_not_visible");
     }
@@ -114,6 +118,7 @@ export async function createChannel(name: string): Promise<CreatedChannel> {
 export async function inviteUsersToChannel(
   channelId: string,
   userIds: readonly string[],
+  teamId?: string,
 ): Promise<void> {
   const users = [...new Set(userIds.filter(Boolean))];
   if (users.length === 0) return;
@@ -122,7 +127,7 @@ export async function inviteUsersToChannel(
     await callSlackApi<SlackApiResponse>("conversations.invite", {
       channel: channelId,
       users: users.join(","),
-    });
+    }, teamId);
   } catch (error) {
     if (error instanceof SlackApiError && error.code === "already_in_channel") return;
     throw error;

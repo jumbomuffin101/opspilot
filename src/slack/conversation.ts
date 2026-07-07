@@ -43,6 +43,7 @@ async function reply(
     blocks,
     fallbackText,
     request.threadTs,
+    request.teamId,
   );
 }
 
@@ -62,7 +63,7 @@ async function investigateFromConversation(
   );
 
   try {
-    const investigation = await investigateIncident(issueText);
+    const investigation = await investigateIncident(issueText, { teamId: request.teamId });
     await saveIncidentContext({
       teamId: request.teamId,
       channelId: request.channelId,
