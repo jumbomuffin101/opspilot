@@ -19,4 +19,7 @@ export const ENVIRONMENT_KEYS = {
   githubToken: "GITHUB_TOKEN",
   githubOwner: "GITHUB_OWNER",
   githubRepo: "GITHUB_REPO",
+  githubClientId: "GITHUB_CLIENT_ID",
+  githubClientSecret: "GITHUB_CLIENT_SECRET",
+  githubRedirectUri: "GITHUB_REDIRECT_URI",
 } as const;

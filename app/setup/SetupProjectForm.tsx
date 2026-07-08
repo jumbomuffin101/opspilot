@@ -19,6 +19,7 @@ interface SetupProjectFormProps {
   teamId: string;
   workspaceName?: string;
   initialConfig?: SafeProjectConfig | null;
+  githubConnected: boolean;
 }
 
 function defaultServicePaths(service: string): ServicePathMapping {
@@ -33,6 +34,7 @@ export function SetupProjectForm({
   teamId,
   workspaceName,
   initialConfig,
+  githubConnected,
 }: SetupProjectFormProps) {
   const [githubOwner, setGithubOwner] = useState(initialConfig?.githubOwner ?? "");
   const [githubRepo, setGithubRepo] = useState(initialConfig?.githubRepo ?? "");
@@ -97,32 +99,38 @@ export function SetupProjectForm({
       <input type="hidden" name="team_id" value={teamId} />
 
       <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm leading-6 text-cyan-100/85">
-        OpsPilot uses this repository to inspect recent commits, changed files, and
-        service-specific paths during incident investigations.
+        OpsPilot uses the connected GitHub repository to inspect recent commits,
+        changed files, and service-specific paths during incident investigations.
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <label className={labelClass}>
-          GitHub owner <span className="text-cyan-200">*</span>
-          <input
-            required
-            className={inputClass}
-            placeholder="acme"
-            value={githubOwner}
-            onChange={(event) => setGithubOwner(event.target.value)}
-          />
-        </label>
-
-        <label className={labelClass}>
-          GitHub repo <span className="text-cyan-200">*</span>
-          <input
-            required
-            className={inputClass}
-            placeholder="commerce-platform"
-            value={githubRepo}
-            onChange={(event) => setGithubRepo(event.target.value)}
-          />
-        </label>
+      <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-white">
+              {githubConnected ? "GitHub connected" : "Connect GitHub"}
+            </p>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              {githubConnected
+                ? "Choose the repository this Slack workspace should use for incident evidence."
+                : "Authorize GitHub so OpsPilot can list repositories and read commit metadata for this workspace."}
+            </p>
+          </div>
+          <a
+            href={
+              githubConnected
+                ? `/setup/github?team_id=${encodeURIComponent(teamId)}`
+                : `/api/github/install?team_id=${encodeURIComponent(teamId)}`
+            }
+            className="inline-flex min-h-12 items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5 hover:bg-slate-100"
+          >
+            {githubConnected ? "Choose Repository" : "Connect GitHub"}
+          </a>
+        </div>
+        {initialConfig ? (
+          <p className="mt-4 rounded-xl border border-white/10 bg-white/[.035] px-4 py-3 font-mono text-xs text-slate-300">
+            Current repo: {initialConfig.githubOwner}/{initialConfig.githubRepo}
+          </p>
+        ) : null}
       </div>
 
       <label className={labelClass}>
@@ -147,10 +155,32 @@ export function SetupProjectForm({
 
       <details className="rounded-2xl border border-white/10 bg-black/20 p-4">
         <summary className="cursor-pointer text-sm font-semibold text-slate-200">
-          Advanced project settings
+          Advanced/manual setup
         </summary>
 
         <div className="mt-5 space-y-5">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <label className={labelClass}>
+              GitHub owner <span className="text-cyan-200">*</span>
+              <input
+                className={inputClass}
+                placeholder="acme"
+                value={githubOwner}
+                onChange={(event) => setGithubOwner(event.target.value)}
+              />
+            </label>
+
+            <label className={labelClass}>
+              GitHub repo <span className="text-cyan-200">*</span>
+              <input
+                className={inputClass}
+                placeholder="commerce-platform"
+                value={githubRepo}
+                onChange={(event) => setGithubRepo(event.target.value)}
+              />
+            </label>
+          </div>
+
           <label className={labelClass}>
             Service path mapping JSON
             <textarea
@@ -186,24 +216,18 @@ export function SetupProjectForm({
 
       <div className="rounded-2xl border border-white/10 bg-white/[.035] p-4">
         <div className="flex items-start gap-3">
-          <span className="mt-1 size-2 rounded-full bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.55)]" />
+          <span className="mt-1 size-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,.55)]" />
           <div>
             <p className="text-sm font-semibold text-slate-200">
-              GitHub access uses deployment credentials
+              GitHub access is workspace-specific when connected
             </p>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              GitHub access currently uses the server-side GitHub token configured by the
-              OpsPilot deployment. No GitHub token is stored in this setup flow.
+              When GitHub is connected, OpsPilot uses this workspace&apos;s stored GitHub
+              OAuth token. Manual fallback can still use the server-side GitHub token
+              configured by the deployment.
             </p>
           </div>
         </div>
-      </div>
-
-      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4">
-        <p className="text-sm font-semibold text-slate-300">Connect GitHub OAuth</p>
-        <p className="mt-1 text-sm leading-6 text-slate-500">
-          Coming soon: allow each workspace to securely authorize its own repositories.
-        </p>
       </div>
 
       <div className="flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">

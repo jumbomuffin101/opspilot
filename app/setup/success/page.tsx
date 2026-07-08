@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { BrandMark } from "@/components/home/BrandMark";
 import { getSafeProjectConfigByTeam } from "@/src/config/projectConfigStore";
+import { hasGitHubInstallation } from "@/src/github/githubInstallationStore";
 import { getInstallationByTeam } from "@/src/slack/installationStore";
 
 export const runtime = "nodejs";
@@ -22,12 +23,13 @@ const slackExamples = [
 export default async function SetupSuccessPage({ searchParams }: SetupSuccessPageProps) {
   const params = await searchParams;
   const teamId = params.team_id?.trim();
-  const [installation, projectConfig] = teamId
+  const [installation, projectConfig, githubConnected] = teamId
     ? await Promise.all([
         getInstallationByTeam(teamId),
         getSafeProjectConfigByTeam(teamId),
+        hasGitHubInstallation(teamId),
       ])
-    : [null, null];
+    : [null, null, false];
 
   return (
     <main className="page-shell min-h-screen px-5 py-10 text-white sm:px-6 lg:px-8">
@@ -106,22 +108,36 @@ export default async function SetupSuccessPage({ searchParams }: SetupSuccessPag
               </div>
             </div>
 
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-slate-300">Connect GitHub OAuth</p>
+                  <p className="text-sm font-semibold text-slate-300">
+                    {githubConnected ? "GitHub OAuth connected" : "Connect GitHub OAuth"}
+                  </p>
                   <p className="mt-1 text-sm leading-6 text-slate-500">
-                    Coming soon: allow each workspace to securely authorize its own
-                    repositories.
+                    {githubConnected
+                      ? "This workspace has a stored GitHub OAuth token for repository evidence."
+                      : "Connect GitHub so this workspace can securely authorize its own repositories."}
                   </p>
                 </div>
-                <button
-                  disabled
-                  type="button"
-                  className="inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-500"
-                >
-                  Coming soon
-                </button>
+                {teamId ? (
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <a
+                      href={`/api/github/install?team_id=${encodeURIComponent(teamId)}`}
+                      className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/[.06]"
+                    >
+                      {githubConnected ? "Reconnect GitHub" : "Connect GitHub"}
+                    </a>
+                    {githubConnected ? (
+                      <Link
+                        href={`/setup/github?team_id=${encodeURIComponent(teamId)}`}
+                        className="inline-flex min-h-10 items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
+                      >
+                        Choose repo
+                      </Link>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
 

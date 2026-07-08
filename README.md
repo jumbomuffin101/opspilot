@@ -39,9 +39,9 @@ Add to Slack
 → Use OpsPilot in Slack
 ```
 
-After installation, users are redirected to `/setup?team_id=...` to connect project context. After saving GitHub owner, repo, default service, service paths, and deployment provider, users land on `/setup/success?team_id=...` with example Slack commands.
+After installation, users are redirected to `/setup?team_id=...` to connect workspace project context. The primary path connects GitHub through OAuth, opens `/setup/github?team_id=...`, lets the workspace choose an accessible repository, and saves the selected owner/repo into `project_configs`. Manual owner/repo entry remains available as an advanced fallback.
 
-Slack OAuth and project configuration are implemented. Per-workspace GitHub OAuth is intentionally not implemented yet; the setup UI shows this as future work. Current GitHub repository access uses the server-side `GITHUB_TOKEN` configured by the OpsPilot deployment.
+Slack OAuth, per-workspace GitHub OAuth, repository picking, and project configuration are implemented. Runtime GitHub evidence uses a workspace GitHub token when available, then falls back to the deployment-wide `GITHUB_TOKEN`, then deterministic mock commits.
 
 ### Conversational intents
 
@@ -118,7 +118,11 @@ app/
   api/slack/actions/      Interactivity endpoint
   api/slack/install/      Slack OAuth install redirect
   api/slack/oauth/        Slack OAuth callback
+  api/github/install/     GitHub OAuth install redirect
+  api/github/oauth/       GitHub OAuth callback
+  api/github/repos/       Safe repository picker data
   setup/                  Post-install project setup page
+  setup/github/           Per-workspace repository picker
   setup/success/          Onboarding completion page
   page.tsx                Submission landing page
 db/
@@ -182,9 +186,12 @@ npm run build
 | `OPENAI_MODEL` | No | Model override; defaults to `gpt-4o-mini` |
 | `DEMO_MODE` | Recommended | `true` forces deterministic evidence and reasoning |
 | `DATABASE_URL` | No | PostgreSQL connection string for persistent incident memory |
-| `GITHUB_TOKEN` | GitHub only | Token with repository Contents read access |
+| `GITHUB_TOKEN` | GitHub fallback | Deployment-wide token with repository Contents read access |
 | `GITHUB_OWNER` | GitHub fallback | Repository account or organization when no workspace config exists |
 | `GITHUB_REPO` | GitHub fallback | Repository name without `.git` when no workspace config exists |
+| `GITHUB_CLIENT_ID` | GitHub OAuth | GitHub OAuth app client ID for per-workspace repository access |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth | GitHub OAuth app client secret used server-side for token exchange and signed state |
+| `GITHUB_REDIRECT_URI` | GitHub OAuth | OAuth callback URL, usually `/api/github/oauth/callback` |
 | `NEXT_PUBLIC_APP_URL` | Deployment | Public application URL |
 | `NEXT_PUBLIC_SLACK_INSTALL_URL` | No | Public Slack OAuth install URL; shows Developer Preview when unset |
 
@@ -206,6 +213,7 @@ When `DATABASE_URL` is configured, OpsPilot uses PostgreSQL. When `DATABASE_URL`
    psql "$DATABASE_URL" -f db/migrations/001_create_incidents.sql
    psql "$DATABASE_URL" -f db/migrations/002_create_slack_installations.sql
    psql "$DATABASE_URL" -f db/migrations/003_create_project_configs.sql
+   psql "$DATABASE_URL" -f db/migrations/004_create_github_installations.sql
    ```
 
 4. Start the app:
@@ -290,6 +298,25 @@ The endpoint returns only safe summary fields: incident ID, title, service, seve
 11. For manual/demo installs, `SLACK_BOT_TOKEN` remains supported as a global fallback.
 12. For local Slack testing, expose `npm run dev` through an HTTPS tunnel and use that public URL.
 
+## GitHub OAuth setup
+
+Create a GitHub OAuth app for OpsPilot:
+
+1. In GitHub, create an OAuth app.
+2. Set the homepage URL to your deployed app URL.
+3. Set the authorization callback URL:
+
+   ```text
+   https://<your-domain>/api/github/oauth/callback
+   ```
+
+4. Configure environment variables:
+   - `GITHUB_CLIENT_ID`
+   - `GITHUB_CLIENT_SECRET`
+   - `GITHUB_REDIRECT_URI=https://<your-domain>/api/github/oauth/callback`
+
+OpsPilot requests `repo read:user` so private repository metadata and commit history can be read for repositories the installer can access. Tokens are stored server-side in `github_installations`, associated with the Slack `team_id`, and are never returned to the browser or Slack.
+
 ## Project setup flow
 
 After Slack OAuth succeeds, OpsPilot redirects to:
@@ -300,11 +327,22 @@ After Slack OAuth succeeds, OpsPilot redirects to:
 
 The setup page is a guided onboarding step. It stores workspace project context:
 
-- GitHub owner
-- GitHub repo
+- GitHub OAuth connection status
+- Selected GitHub owner/repo from the repository picker
 - Default service name
 - Service path mapping JSON
 - Deployment provider: Mock, Vercel, Render, or GitHub Actions
+
+Primary setup path:
+
+```text
+/setup?team_id=...
+-> /api/github/install?team_id=...
+-> GitHub OAuth
+-> /setup/github?team_id=...
+-> repository picker
+-> /setup/success?team_id=...
+```
 
 Project setup posts to:
 
@@ -312,7 +350,15 @@ Project setup posts to:
 POST /api/setup/project
 ```
 
-No GitHub token is stored in this setup flow. Repository access still uses the server-side `GITHUB_TOKEN`. When a Slack team has project config, the GitHub tool uses that workspace's `github_owner` and `github_repo`; otherwise it falls back to `GITHUB_OWNER` and `GITHUB_REPO`.
+The repository picker reads safe repository metadata from:
+
+```text
+GET /api/github/repos?team_id=<slack-team-id>
+```
+
+The API loads the workspace GitHub token from `github_installations`, fetches repositories from GitHub, and returns only safe metadata such as ID, name, owner, visibility, default branch, and URL.
+
+Manual owner/repo entry remains available under **Advanced/manual setup**. It is useful for demo environments or deployments that intentionally use the server-side `GITHUB_TOKEN` fallback.
 
 After a successful save, the browser redirects to:
 
@@ -320,7 +366,7 @@ After a successful save, the browser redirects to:
 /setup/success?team_id=<slack-team-id>
 ```
 
-The success page confirms the workspace, connected repository, default service, and example Slack commands. A GitHub OAuth card is shown as coming soon so the current security model is explicit.
+The success page confirms the workspace, connected repository, default service, GitHub OAuth status, and example Slack commands.
 
 ## Demo mode and production fallbacks
 
@@ -339,9 +385,19 @@ Outside demo mode, missing configuration, timeouts, rate limits, malformed respo
 
 ### GitHub
 
-Set `DEMO_MODE=false` and `GITHUB_TOKEN`. Fine-grained tokens need **Contents: read** for the selected repository. Workspace project config supplies `github_owner` and `github_repo` after setup; `GITHUB_OWNER` and `GITHUB_REPO` remain global fallbacks. OpsPilot retrieves ten commits and enriches the newest three with changed files when available.
+Set `DEMO_MODE=false` and connect GitHub during setup. The GitHub tool resolves credentials in this order:
 
-Per-workspace GitHub OAuth is future work. Until then, repository reads use the deployment's server-side `GITHUB_TOKEN`; the setup page never asks users for a GitHub token.
+1. Workspace GitHub OAuth token from `github_installations`
+2. Deployment-wide `GITHUB_TOKEN`
+3. Deterministic mock commits
+
+The repository is resolved in this order:
+
+1. Workspace project config from `project_configs`
+2. `GITHUB_OWNER` / `GITHUB_REPO`
+3. Deterministic mock commits
+
+OpsPilot retrieves ten commits and enriches the newest three with changed files when available. If GitHub is unavailable, rate-limited, misconfigured, or missing permissions, the investigation safely falls back to mock commit signals.
 
 ### Slack Real-Time Search-ready adapter
 
@@ -360,7 +416,8 @@ Set `DEMO_MODE=false` and `OPENAI_API_KEY`. OpsPilot requests JSON Schema-constr
    - `001_create_incidents.sql`
    - `002_create_slack_installations.sql`
    - `003_create_project_configs.sql`
-5. Add required environment variables for Preview and Production, including `DATABASE_URL`, Slack OAuth credentials, and `GITHUB_TOKEN` when production GitHub evidence is enabled.
+   - `004_create_github_installations.sql`
+5. Add required environment variables for Preview and Production, including `DATABASE_URL`, Slack OAuth credentials, GitHub OAuth credentials, and optionally `GITHUB_TOKEN` as a fallback.
 6. Deploy and verify `https://<your-domain>/api/health`.
 7. Configure the deployed Slack command, Events API, OAuth redirect, and interactivity URLs.
 8. Install through Add to Slack, complete `/setup`, and run the demo command.
