@@ -12,6 +12,30 @@ function matches(text: string, pattern: RegExp): boolean {
   return pattern.test(text);
 }
 
+function isRepoAuditRequest(text: string): boolean {
+  const repositoryTarget = String.raw`(?:repo|repository|codebase)`;
+  const optionalDescriptor = String.raw`(?:\s+[a-z0-9][a-z0-9-]*){0,6}`;
+  const patterns = [
+    new RegExp(String.raw`\bcheck\s+(?:my|the|this)${optionalDescriptor}\s+${repositoryTarget}\b`),
+    new RegExp(String.raw`\baudit\s+(?:my|the|this)?${optionalDescriptor}\s*${repositoryTarget}\b`),
+    new RegExp(String.raw`\binspect\s+(?:my|the|this)?${optionalDescriptor}\s*${repositoryTarget}\b`),
+    new RegExp(String.raw`\breview\s+(?:my|the|this)?${optionalDescriptor}\s*${repositoryTarget}\b`),
+    /\breview\s+recent\s+changes\b/,
+    /\bwhat\s+changed\s+recently\b/,
+    /\bany\s+repo\s+issues\b/,
+    /\brepository\s+issues\b/,
+    /\bcodebase\s+issues\b/,
+    /\bcheck\s+codebase\b/,
+    /\baudit\s+codebase\b/,
+    /\bshow\s+recent\s+commits\b/,
+    /\bsecurity\s+concerns\b/,
+    /\bwhat\s+should\s+i\s+test\b/,
+    /\bhighest[-\s]risk\s+change\b/,
+  ];
+
+  return patterns.some((pattern) => pattern.test(text));
+}
+
 export function routeConversationalIntent(text: string): RoutedConversationalIntent {
   const query = cleanRequest(text);
   const normalized = query.toLowerCase();
@@ -29,12 +53,7 @@ export function routeConversationalIntent(text: string): RoutedConversationalInt
     return { intent: "postmortem", query, executiveSummary: false };
   }
 
-  if (
-    matches(
-      normalized,
-      /\b(check my repo|repo issues|audit repo|audit this repository|review recent changes|inspect (?:the )?repository|what changed recently|show recent commits|security concerns|what should i test|highest risk change)\b/,
-    )
-  ) {
+  if (isRepoAuditRequest(normalized)) {
     return { intent: "repo_audit", query, executiveSummary: false };
   }
 
