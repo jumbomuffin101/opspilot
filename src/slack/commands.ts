@@ -1,5 +1,6 @@
 export type ParsedOpsPilotCommand =
   | { type: "investigate"; issueText: string }
+  | { type: "repo_audit"; query: string }
   | { type: "unknown"; commandName: string };
 
 export function parseOpsPilotCommand(text: string): ParsedOpsPilotCommand {
@@ -12,6 +13,10 @@ export function parseOpsPilotCommand(text: string): ParsedOpsPilotCommand {
 
   if (commandName === "investigate") {
     return { type: "investigate", issueText: remainder };
+  }
+
+  if (commandName === "audit" && (!remainder || remainder === "repo")) {
+    return { type: "repo_audit", query: remainder || "audit repo" };
   }
 
   return { type: "unknown", commandName };

@@ -12,6 +12,7 @@ import type {
   IncidentEvidenceSource,
   IncidentInvestigation,
 } from "@/src/types/incident";
+import type { RepoAuditChange, RepoAuditResult } from "@/src/types/tools";
 import type { KnownBlock } from "@/src/types/slack";
 import type { IncidentActionContext } from "@/src/types/slack";
 
@@ -39,6 +40,25 @@ function formatEvidenceGroup(source: IncidentEvidenceSource, evidence: IncidentE
     );
 
   return items.length > 0 ? `*${EVIDENCE_LABELS[source]}*\n${toCompactBullets(items, 2)}` : "";
+}
+
+function formatAuditChange(change: RepoAuditChange): string {
+  const files = change.filesChanged.length
+    ? `\nFiles: ${change.filesChanged.slice(0, 4).map((file) => `\`${escapeMrkdwn(file)}\``).join(", ")}${change.filesChanged.length > 4 ? `, +${change.filesChanged.length - 4} more` : ""}`
+    : "\nFiles: _metadata unavailable_";
+  const reasons = change.reasons.length ? `\nSignals: ${change.reasons.slice(0, 2).map(escapeMrkdwn).join("; ")}` : "";
+
+  return `\`${change.sha.slice(0, 7)}\` *${escapeMrkdwn(change.message)}* — ${escapeMrkdwn(change.author)} (${formatCompactTimestamp(change.committedAt)})${files}${reasons}`;
+}
+
+function riskLabel(risk: RepoAuditChange["risk"]): string {
+  const labels: Record<RepoAuditChange["risk"], string> = {
+    high: ":red_circle: High",
+    medium: ":large_yellow_circle: Medium",
+    low: ":large_blue_circle: Low",
+  };
+
+  return labels[risk];
 }
 
 export function investigationStartedBlocks(issueText: string, requesterId: string): KnownBlock[] {
@@ -242,6 +262,212 @@ export function investigationResultBlocks(
   ];
 }
 
+export function repoAuditStartedBlocks(requestText: string, requesterId: string): KnownBlock[] {
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: "OpsPilot is auditing the repository" },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Request*\n${escapeMrkdwn(truncateSlackText(requestText || "Audit the selected repository", 1_000))}`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Requester:* <@${requesterId}>\n*Status:* Reviewing recent commits and changed-file metadata`,
+      },
+    },
+  ];
+}
+
+export function repoAuditBlocks(result: RepoAuditResult): KnownBlock[] {
+  const recentChanges = [
+    ...result.highRiskChanges,
+    ...result.mediumRiskChanges,
+    ...result.lowRiskChanges,
+  ].slice(0, 5);
+  const highestRisk = result.highRiskChanges.length
+    ? result.highRiskChanges.map((change) => `${riskLabel(change.risk)} ${formatAuditChange(change)}`)
+    : result.mediumRiskChanges.slice(0, 2).map(
+        (change) => `${riskLabel(change.risk)} ${formatAuditChange(change)}`,
+      );
+  const concerns = [...result.configConcerns, ...result.securityConcerns];
+
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: "Repository Audit" },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(
+          `*Repo:* \`${escapeMrkdwn(result.repo.owner)}/${escapeMrkdwn(result.repo.name)}\`\n${formatConfidenceScore(result.confidenceScore)}\n\n*Summary*\n${escapeMrkdwn(result.summary)}`,
+        ),
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Recent Changes Reviewed*\n${recentChanges.length ? toCompactBullets(recentChanges.map(formatAuditChange), 4) : "_No recent commits were available._"}`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(
+          `*Highest-Risk Changes*\n${highestRisk.length ? toCompactBullets(highestRisk, 3) : "_No high-risk file patterns were detected._"}`,
+        ),
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(
+          `*Config/Security Concerns*\n${concerns.length ? compactBullets(concerns, 5) : "_No obvious config or security concerns were found in recent changed-file metadata._"}`,
+        ),
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(
+          `*Recommended Actions*\n${compactBullets(result.recommendedActions, 5)}`,
+        ),
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(
+          `*What OpsPilot could not verify*\n${compactBullets(result.limitations, 4)}`,
+        ),
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: result.metadataOnly
+            ? "Repository audit · Based on commit metadata and changed-file paths only."
+            : "Repository audit · Includes commit metadata and limited small-file content signals.",
+        },
+      ],
+    },
+  ];
+}
+
+export function repoAuditErrorBlocks(): KnownBlock[] {
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: "OpsPilot couldn't complete the repository audit" },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "Something went wrong while reviewing the connected repository. Check GitHub setup or try again in a moment.",
+      },
+    },
+  ];
+}
+
+export function repoAuditRiskExplanationBlocks(result: RepoAuditResult): KnownBlock[] {
+  const change = result.highRiskChanges[0] ?? result.mediumRiskChanges[0] ?? result.lowRiskChanges[0];
+  if (!change) return repoAuditBlocks(result);
+
+  return [
+    { type: "header", text: { type: "plain_text", text: "Highest-Risk Repository Change" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(
+          `${riskLabel(change.risk)} ${formatAuditChange(change)}\n\n*Why it matters*\n${compactBullets(change.reasons, 4)}`,
+        ),
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Suggested validation*\n${compactBullets(result.recommendedActions, 4)}`,
+      },
+    },
+  ];
+}
+
+export function repoAuditRecentCommitsBlocks(result: RepoAuditResult): KnownBlock[] {
+  const commits = [
+    ...result.highRiskChanges,
+    ...result.mediumRiskChanges,
+    ...result.lowRiskChanges,
+  ].slice(0, 8);
+
+  return [
+    { type: "header", text: { type: "plain_text", text: "Recent Repository Changes" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(
+          commits.length ? toCompactBullets(commits.map(formatAuditChange), 6) : "_No recent commits were available._",
+        ),
+      },
+    },
+  ];
+}
+
+export function repoAuditTestPlanBlocks(result: RepoAuditResult): KnownBlock[] {
+  return [
+    { type: "header", text: { type: "plain_text", text: "What to Test Next" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(compactBullets(result.recommendedActions, 6)),
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: "Use this as a validation checklist; OpsPilot has not run CI, tests, or production telemetry checks.",
+        },
+      ],
+    },
+  ];
+}
+
+export function repoAuditSecurityBlocks(result: RepoAuditResult): KnownBlock[] {
+  return [
+    { type: "header", text: { type: "plain_text", text: "Security and Config Signals" } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(
+          `*Security concerns*\n${result.securityConcerns.length ? compactBullets(result.securityConcerns, 5) : "_No obvious security-sensitive changed-file patterns were found._"}\n\n*Configuration concerns*\n${result.configConcerns.length ? compactBullets(result.configConcerns, 5) : "_No obvious configuration concerns were found._"}`,
+        ),
+      },
+    },
+  ];
+}
+
 export function incidentKickoffBlocks(
   investigation: IncidentInvestigation,
   context: IncidentActionContext,
@@ -432,7 +658,7 @@ export function usageBlocks(): KnownBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "Describe the operational issue after `investigate`.\n\n*Example*\n`/opspilot investigate checkout API is failing after latest deploy`",
+        text: "Use `investigate` for operational issues or `audit` for repository health.\n\n*Examples*\n`/opspilot investigate checkout API is failing after latest deploy`\n`/opspilot audit repo`",
       },
     },
   ];
@@ -494,7 +720,7 @@ export function conversationalHelpBlocks(): KnownBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "Mention me with a natural-language request. Start an incident with:\n`@OpsPilot investigate checkout failures`",
+        text: "Mention me with a natural-language request. Start an incident with:\n`@OpsPilot investigate checkout failures`\n\nReview the connected repository with:\n`@OpsPilot check my repo for issues`",
       },
     },
     {

@@ -29,6 +29,15 @@ export function routeConversationalIntent(text: string): RoutedConversationalInt
     return { intent: "postmortem", query, executiveSummary: false };
   }
 
+  if (
+    matches(
+      normalized,
+      /\b(check my repo|repo issues|audit repo|audit this repository|review recent changes|inspect (?:the )?repository|what changed recently|show recent commits|security concerns|what should i test|highest risk change)\b/,
+    )
+  ) {
+    return { intent: "repo_audit", query, executiveSummary: false };
+  }
+
   if (INVESTIGATION_PREFIX.test(query)) {
     return {
       intent: "investigate",

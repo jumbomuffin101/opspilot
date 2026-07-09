@@ -32,6 +32,38 @@ export interface GitHubToolResult {
   commits: CommitSignal[];
 }
 
+export type RepoAuditRiskLevel = "high" | "medium" | "low";
+
+export interface RepoAuditChange {
+  sha: string;
+  message: string;
+  author: string;
+  committedAt: string;
+  url?: string;
+  filesChanged: string[];
+  risk: RepoAuditRiskLevel;
+  reasons: string[];
+  contentSignals: string[];
+}
+
+export interface RepoAuditResult {
+  repo: {
+    owner: string;
+    name: string;
+  };
+  scannedCommits: number;
+  highRiskChanges: RepoAuditChange[];
+  mediumRiskChanges: RepoAuditChange[];
+  lowRiskChanges: RepoAuditChange[];
+  configConcerns: string[];
+  securityConcerns: string[];
+  recommendedActions: string[];
+  summary: string;
+  confidenceScore: number;
+  metadataOnly: boolean;
+  limitations: string[];
+}
+
 export interface DeploymentSignal {
   id: string;
   service: string;

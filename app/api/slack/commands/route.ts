@@ -2,11 +2,16 @@ import { after, NextResponse } from "next/server";
 
 import { investigateIncident } from "@/src/agents/incidentAgent";
 import { saveIncidentContext } from "@/src/agents/persistentIncidentStore";
+import { auditRepository } from "@/src/agents/repoAuditAgent";
+import { saveRepoAuditContext } from "@/src/agents/repoAuditContext";
 import { logger } from "@/src/lib/logger";
 import {
   investigationErrorBlocks,
   investigationResultBlocks,
   investigationStartedBlocks,
+  repoAuditBlocks,
+  repoAuditErrorBlocks,
+  repoAuditStartedBlocks,
   unknownCommandBlocks,
   usageBlocks,
 } from "@/src/slack/blocks";
@@ -81,6 +86,42 @@ async function postInvestigation(
   }
 }
 
+async function postRepoAudit(
+  teamId: string,
+  channelId: string,
+  requestText: string,
+  requesterId: string,
+): Promise<void> {
+  let blocks: KnownBlock[];
+
+  try {
+    const audit = await auditRepository(requestText, { teamId });
+    await saveRepoAuditContext({
+      teamId,
+      channelId,
+      requesterId,
+      requestText,
+      audit,
+    });
+    blocks = repoAuditBlocks(audit);
+  } catch (error) {
+    logger.error("Repository audit failed", {
+      channelId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    blocks = repoAuditErrorBlocks();
+  }
+
+  try {
+    await postMessage(channelId, blocks, "OpsPilot repository audit", undefined, teamId);
+  } catch (error) {
+    logger.error("Failed to post repository audit to Slack", {
+      channelId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   const rawBody = await request.text();
   const isVerified = verifySlackRequest({
@@ -103,6 +144,15 @@ export async function POST(request: Request): Promise<NextResponse> {
   const command = parseOpsPilotCommand(payload.text);
   if (command.type === "unknown") {
     return slackResponse(unknownCommandBlocks(command.commandName));
+  }
+
+  if (command.type === "repo_audit") {
+    const requestText = command.query || "audit repo";
+    after(() =>
+      postRepoAudit(payload.teamId, payload.channelId, requestText, payload.userId),
+    );
+
+    return slackResponse(repoAuditStartedBlocks(requestText, payload.userId), "in_channel");
   }
 
   if (!command.issueText) {

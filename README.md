@@ -11,11 +11,20 @@ The web application is a submission and architecture surface. **Slack is the pri
 ```text
 /opspilot investigate checkout API returning 500 errors after latest deploy
 @OpsPilot investigate checkout failures
+/opspilot audit repo
+@OpsPilot check my repo for issues
 ```
 
 Then continue naturally: `@OpsPilot explain why you think the database is responsible` or `@OpsPilot generate an executive summary`.
 
 For judging, set `DEMO_MODE=true`. The checkout scenario then uses deterministic Slack history, commits, deployments, ownership, prior incidents, and reasoning while still receiving real signed Slack commands and button actions.
+
+## Workflows
+
+OpsPilot now supports two Slack-native workflows:
+
+1. **Incident investigation** — use `/opspilot investigate <issue>` or `@OpsPilot investigate checkout failures` when responders are actively debugging an outage or degraded service.
+2. **Repository audit / recent-change review** — use `/opspilot audit repo` or `@OpsPilot check my repo for issues` to review recent commits, changed files, risky paths, config/security concerns, and recommended validation steps without starting an incident workflow.
 
 ## Demo flow
 
@@ -57,17 +66,19 @@ Slack OAuth, per-workspace GitHub OAuth, repository picking, and project configu
 | `evidence` | `@OpsPilot what evidence supports this conclusion?` |
 | `postmortem` | `@OpsPilot draft the postmortem` |
 | `resolve` | `@OpsPilot mark the incident resolved` |
+| `repo_audit` | `@OpsPilot review recent changes` |
 | `help` | `@OpsPilot help` |
 
 ## Features
 
 - Signed Slack Events API, slash-command, and interactivity endpoints
-- Natural-language intent routing across eleven incident intents
+- Natural-language intent routing across incident and repository-audit intents
 - Threaded `@OpsPilot` conversations with active incident context
 - Fast acknowledgement with deferred investigation delivery
 - Typed, concurrent evidence-tool architecture with partial-failure tolerance
 - Structured OpenAI reasoning with independent validation and deterministic fallback
 - Real GitHub commit retrieval, detail enrichment, relevance ranking, and mock fallback
+- Repository health audit mode for recent-change, risky-path, config, and security review
 - Slack Real-Time Search-ready adapter with defensive response mapping and mock fallback
 - Polished Block Kit incident briefs and actionable incident-workflow buttons
 - Incident channel creation, response checklist, postmortem draft, and resolution update
@@ -135,6 +146,7 @@ src/
   services/               OpenAI, GitHub, and Slack RTS adapters
   slack/                  Blocks, handlers, client, commands, and verification
   tools/                  Independent evidence tools and registry
+  tools/repoAuditTool.ts  Repository audit workflow tool
   types/                  Domain and integration contracts
 ```
 

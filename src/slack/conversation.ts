@@ -5,6 +5,11 @@ import {
   updateIncidentStatus,
 } from "@/src/agents/persistentIncidentStore";
 import { routeConversationalIntent } from "@/src/agents/intentRouter";
+import { auditRepository } from "@/src/agents/repoAuditAgent";
+import {
+  getLatestRepoAuditContext,
+  saveRepoAuditContext,
+} from "@/src/agents/repoAuditContext";
 import { logger } from "@/src/lib/logger";
 import {
   conversationalDeploymentsBlocks,
@@ -20,6 +25,13 @@ import {
   investigationStartedBlocks,
   noActiveIncidentBlocks,
   postmortemDraftBlocks,
+  repoAuditBlocks,
+  repoAuditErrorBlocks,
+  repoAuditRecentCommitsBlocks,
+  repoAuditRiskExplanationBlocks,
+  repoAuditSecurityBlocks,
+  repoAuditStartedBlocks,
+  repoAuditTestPlanBlocks,
   resolvedStatusBlocks,
 } from "@/src/slack/blocks";
 import { postMessage } from "@/src/slack/client";
@@ -96,6 +108,91 @@ async function investigateFromConversation(
   }
 }
 
+async function auditFromConversation(
+  request: ConversationalRequest,
+  requestText: string,
+): Promise<void> {
+  const auditText = requestText || "audit this repository";
+  await reply(
+    request,
+    repoAuditStartedBlocks(auditText, request.userId),
+    `OpsPilot is auditing the repository: ${auditText}`,
+  );
+
+  try {
+    const audit = await auditRepository(auditText, { teamId: request.teamId });
+    await saveRepoAuditContext({
+      teamId: request.teamId,
+      channelId: request.channelId,
+      threadTs: request.threadTs,
+      requesterId: request.userId,
+      requestText: auditText,
+      audit,
+    });
+    await reply(
+      request,
+      repoAuditBlocks(audit),
+      `Repository audit for ${audit.repo.owner}/${audit.repo.name}`,
+    );
+  } catch (error) {
+    logger.error("Conversational repository audit failed", {
+      teamId: request.teamId,
+      channelId: request.channelId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await reply(request, repoAuditErrorBlocks(), "OpsPilot could not complete the repository audit");
+  }
+}
+
+function repoAuditFollowUpKind(
+  intent: string,
+  query: string,
+): "risk" | "commits" | "testing" | "security" | null {
+  const normalized = query.toLowerCase();
+  if (/\b(highest risk|highest-risk|risky|why)\b/.test(normalized) || intent === "explain") {
+    return "risk";
+  }
+  if (/\b(recent commits|recent changes|what changed|commit)\b/.test(normalized)) {
+    return "commits";
+  }
+  if (/\b(test|validate|verification|what should i test)\b/.test(normalized)) {
+    return "testing";
+  }
+  if (/\b(security|auth|oauth|token|secret|permission)\b/.test(normalized)) {
+    return "security";
+  }
+  return null;
+}
+
+async function replyFromRepoAuditContext(
+  request: ConversationalRequest,
+  kind: "risk" | "commits" | "testing" | "security",
+): Promise<boolean> {
+  const context = await getLatestRepoAuditContext(
+    request.teamId,
+    request.channelId,
+    request.threadTs,
+  );
+  if (!context) return false;
+
+  const audit = context.audit;
+  if (kind === "risk") {
+    await reply(request, repoAuditRiskExplanationBlocks(audit), "Highest-risk repository change");
+    return true;
+  }
+  if (kind === "commits") {
+    await reply(request, repoAuditRecentCommitsBlocks(audit), "Recent repository commits");
+    return true;
+  }
+  if (kind === "testing") {
+    await reply(request, repoAuditTestPlanBlocks(audit), "Repository audit test plan");
+    return true;
+  }
+
+  await reply(request, repoAuditSecurityBlocks(audit), "Repository security and config signals");
+  return true;
+}
+
 /** Routes one app mention and responds in the originating Slack thread. */
 export async function handleConversationalRequest(
   request: ConversationalRequest,
@@ -114,6 +211,16 @@ export async function handleConversationalRequest(
 
   if (routed.intent === "investigate") {
     await investigateFromConversation(request, routed.query);
+    return;
+  }
+
+  const auditFollowUpKind = repoAuditFollowUpKind(routed.intent, routed.query);
+  if (auditFollowUpKind && await replyFromRepoAuditContext(request, auditFollowUpKind)) {
+    return;
+  }
+
+  if (routed.intent === "repo_audit") {
+    await auditFromConversation(request, routed.query);
     return;
   }
 
