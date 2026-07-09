@@ -6,6 +6,7 @@ const navigation = [
   { label: "Features", href: "#features" },
   { label: "Architecture", href: "#architecture" },
   { label: "Why Slack", href: "#why-slack" },
+  { label: "Commands", href: "/commands" },
 ] as const;
 
 export function Header() {

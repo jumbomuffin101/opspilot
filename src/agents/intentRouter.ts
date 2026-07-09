@@ -27,10 +27,6 @@ function isRepoAuditRequest(text: string): boolean {
     /\bcodebase\s+issues\b/,
     /\bcheck\s+codebase\b/,
     /\baudit\s+codebase\b/,
-    /\bshow\s+recent\s+commits\b/,
-    /\bsecurity\s+concerns\b/,
-    /\bwhat\s+should\s+i\s+test\b/,
-    /\bhighest[-\s]risk\s+change\b/,
   ];
 
   return patterns.some((pattern) => pattern.test(text));
@@ -41,7 +37,7 @@ export function routeConversationalIntent(text: string): RoutedConversationalInt
   const normalized = query.toLowerCase();
   const executiveSummary = matches(normalized, /\bexecutive\b|\bleadership\b/);
 
-  if (!query || matches(normalized, /^(help|what can you do|show commands|commands)\??$/)) {
+  if (!query || matches(normalized, /^(help|what can you do|how do i use this|show commands|commands)\??$/)) {
     return { intent: "help", query, executiveSummary: false };
   }
 
@@ -55,6 +51,34 @@ export function routeConversationalIntent(text: string): RoutedConversationalInt
 
   if (isRepoAuditRequest(normalized)) {
     return { intent: "repo_audit", query, executiveSummary: false };
+  }
+
+  if (matches(normalized, /\b(summarize this repo|summarize this repository|what does this project do|explain this codebase)\b/)) {
+    return { intent: "repo_summary", query, executiveSummary: false };
+  }
+
+  if (matches(normalized, /\b(explain the highest risk change|highest[-\s]risk change|why is this commit risky|explain the .*risk|risky commit|security concerns|any security concerns)\b/)) {
+    return { intent: "risk_explain", query, executiveSummary: false };
+  }
+
+  if (matches(normalized, /\b(what should i test|generate a test plan|test plan|what tests should i run before deploying)\b/)) {
+    return { intent: "test_plan", query, executiveSummary: false };
+  }
+
+  if (matches(normalized, /\b(write release notes|release notes|summarize recent changes for release|generate changelog|changelog)\b/)) {
+    return { intent: "release_notes", query, executiveSummary: false };
+  }
+
+  if (matches(normalized, /\b(what should we do next|give next actions|next actions|next steps|recommend follow[-\s]?up actions|follow[-\s]?up actions)\b/)) {
+    return { intent: "next_steps", query, executiveSummary: false };
+  }
+
+  if (matches(normalized, /\b(create a runbook|draft a rollback runbook|rollback runbook|remediation plan|what is the remediation plan|runbook)\b/)) {
+    return { intent: "runbook", query, executiveSummary: false };
+  }
+
+  if (matches(normalized, /\b(who owns this|who should review this|assign reviewers|reviewers|owner[s]?)\b/)) {
+    return { intent: "owners", query, executiveSummary: false };
   }
 
   if (INVESTIGATION_PREFIX.test(query)) {

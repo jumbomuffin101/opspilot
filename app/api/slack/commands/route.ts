@@ -3,15 +3,32 @@ import { after, NextResponse } from "next/server";
 import { investigateIncident } from "@/src/agents/incidentAgent";
 import { saveIncidentContext } from "@/src/agents/persistentIncidentStore";
 import { auditRepository } from "@/src/agents/repoAuditAgent";
-import { saveRepoAuditContext } from "@/src/agents/repoAuditContext";
+import {
+  generateNextSteps,
+  generateReleaseNotes,
+  generateRepoSummary,
+  generateRunbook,
+  generateTestPlan,
+} from "@/src/agents/repoFollowupAgent";
+import {
+  getLatestRepoAuditContext,
+  saveRepoAuditContext,
+} from "@/src/agents/repoAuditContext";
 import { logger } from "@/src/lib/logger";
 import {
+  expandedHelpBlocks,
   investigationErrorBlocks,
   investigationResultBlocks,
   investigationStartedBlocks,
+  nextStepsBlocks,
+  noRepoAuditContextBlocks,
+  releaseNotesBlocks,
   repoAuditBlocks,
   repoAuditErrorBlocks,
   repoAuditStartedBlocks,
+  repoSummaryBlocks,
+  runbookBlocks,
+  testPlanBlocks,
   unknownCommandBlocks,
   usageBlocks,
 } from "@/src/slack/blocks";
@@ -122,6 +139,29 @@ async function postRepoAudit(
   }
 }
 
+async function getRepoFollowupBlocks(
+  teamId: string,
+  channelId: string,
+  intent: Exclude<Extract<ReturnType<typeof parseOpsPilotCommand>, { type: "repo_followup" }>["intent"], "help">,
+): Promise<KnownBlock[]> {
+  const context = await getLatestRepoAuditContext(teamId, channelId);
+  if (!context) return noRepoAuditContextBlocks();
+
+  const audit = context.audit;
+  switch (intent) {
+    case "repo_summary":
+      return repoSummaryBlocks(generateRepoSummary(audit));
+    case "test_plan":
+      return testPlanBlocks(generateTestPlan(audit));
+    case "release_notes":
+      return releaseNotesBlocks(generateReleaseNotes(audit));
+    case "next_steps":
+      return nextStepsBlocks(generateNextSteps(audit));
+    case "runbook":
+      return runbookBlocks(generateRunbook(audit));
+  }
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   const rawBody = await request.text();
   const isVerified = verifySlackRequest({
@@ -144,6 +184,19 @@ export async function POST(request: Request): Promise<NextResponse> {
   const command = parseOpsPilotCommand(payload.text);
   if (command.type === "unknown") {
     return slackResponse(unknownCommandBlocks(command.commandName));
+  }
+
+  if (command.type === "repo_followup") {
+    if (command.intent === "help") {
+      return slackResponse(expandedHelpBlocks());
+    }
+
+    const blocks = await getRepoFollowupBlocks(
+      payload.teamId,
+      payload.channelId,
+      command.intent,
+    );
+    return slackResponse(blocks, "in_channel");
   }
 
   if (command.type === "repo_audit") {

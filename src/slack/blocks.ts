@@ -7,6 +7,12 @@ import {
   toCompactBullets,
   truncateSlackText,
 } from "@/src/lib/utils";
+import {
+  incidentResponseCommands,
+  repositoryIntelligenceCommands,
+  slashCommandAlternatives,
+} from "@/src/lib/commandGuide";
+import type { RepoFollowupResponse } from "@/src/agents/repoFollowupAgent";
 import type {
   IncidentEvidence,
   IncidentEvidenceSource,
@@ -468,6 +474,67 @@ export function repoAuditSecurityBlocks(result: RepoAuditResult): KnownBlock[] {
   ];
 }
 
+function commandList(items: readonly { label: string; description: string }[]): string {
+  return items.map((item) => `• \`${escapeMrkdwn(item.label)}\` — ${escapeMrkdwn(item.description)}`).join("\n");
+}
+
+function repoFollowupBlocks(response: RepoFollowupResponse): KnownBlock[] {
+  return [
+    { type: "header", text: { type: "plain_text", text: response.title } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: truncateSlackText(`*${escapeMrkdwn(response.summary)}*\n${compactBullets(response.bullets, 6)}`),
+      },
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: escapeMrkdwn(response.context) }],
+    },
+  ];
+}
+
+export function repoSummaryBlocks(response: RepoFollowupResponse): KnownBlock[] {
+  return repoFollowupBlocks(response);
+}
+
+export function riskExplanationBlocks(response: RepoFollowupResponse): KnownBlock[] {
+  return repoFollowupBlocks(response);
+}
+
+export function testPlanBlocks(response: RepoFollowupResponse): KnownBlock[] {
+  return repoFollowupBlocks(response);
+}
+
+export function releaseNotesBlocks(response: RepoFollowupResponse): KnownBlock[] {
+  return repoFollowupBlocks(response);
+}
+
+export function nextStepsBlocks(response: RepoFollowupResponse): KnownBlock[] {
+  return repoFollowupBlocks(response);
+}
+
+export function runbookBlocks(response: RepoFollowupResponse): KnownBlock[] {
+  return repoFollowupBlocks(response);
+}
+
+export function reviewOwnersBlocks(response: RepoFollowupResponse): KnownBlock[] {
+  return repoFollowupBlocks(response);
+}
+
+export function noRepoAuditContextBlocks(): KnownBlock[] {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: ":information_source: *I need a recent repository audit first.*\nRun `@OpsPilot check my repo for issues` or `/opspilot audit repo`, then ask follow-up questions like `what should I test?`.",
+      },
+    },
+  ];
+}
+
 export function incidentKickoffBlocks(
   investigation: IncidentInvestigation,
   context: IncidentActionContext,
@@ -747,6 +814,42 @@ export function noActiveIncidentBlocks(): KnownBlock[] {
         type: "mrkdwn",
         text: ":information_source: *There is no active incident in this channel.*\nStart one with `@OpsPilot investigate <issue>` or `/opspilot investigate <issue>`.",
       },
+    },
+  ];
+}
+
+export function expandedHelpBlocks(): KnownBlock[] {
+  return [
+    {
+      type: "header",
+      text: { type: "plain_text", text: "OpsPilot Help" },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Incident Response*\n${commandList(incidentResponseCommands)}`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Repository Intelligence*\n${commandList(repositoryIntelligenceCommands)}`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Slash command alternatives*\n${commandList(slashCommandAlternatives)}`,
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: "OpsPilot remembers the latest incident or repo audit in the current channel/thread." },
+      ],
     },
   ];
 }

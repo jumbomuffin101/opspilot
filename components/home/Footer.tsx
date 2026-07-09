@@ -7,10 +7,11 @@ import {
 } from "@/components/home/links";
 
 const footerLinks = [
-  { label: "Documentation", href: DOCUMENTATION_URL },
-  { label: "GitHub", href: GITHUB_URL },
-  { label: "Devpost", href: DEVPOST_URL },
-  { label: "License", href: LICENSE_URL },
+  { label: "Commands", href: "/commands", external: false },
+  { label: "Documentation", href: DOCUMENTATION_URL, external: true },
+  { label: "GitHub", href: GITHUB_URL, external: true },
+  { label: "Devpost", href: DEVPOST_URL, external: true },
+  { label: "License", href: LICENSE_URL, external: true },
 ] as const;
 
 export function Footer() {
@@ -27,8 +28,8 @@ export function Footer() {
               <a
                 key={link.label}
                 href={link.href}
-                target="_blank"
-                rel="noreferrer"
+                target={link.external === false ? undefined : "_blank"}
+                rel={link.external === false ? undefined : "noreferrer"}
                 className="transition hover:text-white"
               >
                 {link.label}

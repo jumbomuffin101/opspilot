@@ -7,6 +7,15 @@ import {
 import { routeConversationalIntent } from "@/src/agents/intentRouter";
 import { auditRepository } from "@/src/agents/repoAuditAgent";
 import {
+  explainHighestRiskChange,
+  generateNextSteps,
+  generateReleaseNotes,
+  generateRepoSummary,
+  generateRunbook,
+  generateTestPlan,
+  suggestReviewOwners,
+} from "@/src/agents/repoFollowupAgent";
+import {
   getLatestRepoAuditContext,
   saveRepoAuditContext,
 } from "@/src/agents/repoAuditContext";
@@ -15,16 +24,19 @@ import {
   conversationalDeploymentsBlocks,
   conversationalEvidenceBlocks,
   conversationalExplanationBlocks,
-  conversationalHelpBlocks,
   conversationalOwnersBlocks,
   conversationalStatusBlocks,
   conversationalSummaryBlocks,
   conversationalTimelineBlocks,
+  expandedHelpBlocks,
   investigationErrorBlocks,
   investigationResultBlocks,
   investigationStartedBlocks,
   noActiveIncidentBlocks,
+  noRepoAuditContextBlocks,
+  nextStepsBlocks,
   postmortemDraftBlocks,
+  releaseNotesBlocks,
   repoAuditBlocks,
   repoAuditErrorBlocks,
   repoAuditRecentCommitsBlocks,
@@ -32,6 +44,11 @@ import {
   repoAuditSecurityBlocks,
   repoAuditStartedBlocks,
   repoAuditTestPlanBlocks,
+  repoSummaryBlocks,
+  reviewOwnersBlocks,
+  riskExplanationBlocks,
+  runbookBlocks,
+  testPlanBlocks,
   resolvedStatusBlocks,
 } from "@/src/slack/blocks";
 import { postMessage } from "@/src/slack/client";
@@ -64,7 +81,7 @@ async function investigateFromConversation(
   issueText: string,
 ): Promise<void> {
   if (!issueText) {
-    await reply(request, conversationalHelpBlocks(), "How to talk to OpsPilot");
+    await reply(request, expandedHelpBlocks(), "How to talk to OpsPilot");
     return;
   }
 
@@ -149,7 +166,7 @@ function repoAuditFollowUpKind(
   query: string,
 ): "risk" | "commits" | "testing" | "security" | null {
   const normalized = query.toLowerCase();
-  if (/\b(highest risk|highest-risk|risky|why)\b/.test(normalized) || intent === "explain") {
+  if (/\b(highest risk|highest-risk|risky commit|commit risky|oauth risk)\b/.test(normalized)) {
     return "risk";
   }
   if (/\b(recent commits|recent changes|what changed|commit)\b/.test(normalized)) {
@@ -193,6 +210,61 @@ async function replyFromRepoAuditContext(
   return true;
 }
 
+async function replyWithRepoFollowup(
+  request: ConversationalRequest,
+  intent:
+    | "repo_summary"
+    | "risk_explain"
+    | "test_plan"
+    | "release_notes"
+    | "next_steps"
+    | "runbook"
+    | "owners",
+): Promise<boolean> {
+  const context = await getLatestRepoAuditContext(
+    request.teamId,
+    request.channelId,
+    request.threadTs,
+  );
+  if (!context) {
+    await reply(
+      request,
+      noRepoAuditContextBlocks(),
+      "Run a repository audit first.",
+    );
+    return true;
+  }
+
+  const audit = context.audit;
+  switch (intent) {
+    case "repo_summary":
+      await reply(request, repoSummaryBlocks(generateRepoSummary(audit)), "Repository summary");
+      return true;
+    case "risk_explain":
+      await reply(
+        request,
+        riskExplanationBlocks(explainHighestRiskChange(audit)),
+        "Repository risk explanation",
+      );
+      return true;
+    case "test_plan":
+      await reply(request, testPlanBlocks(generateTestPlan(audit)), "Repository test plan");
+      return true;
+    case "release_notes":
+      await reply(request, releaseNotesBlocks(generateReleaseNotes(audit)), "Release notes");
+      return true;
+    case "next_steps":
+      await reply(request, nextStepsBlocks(generateNextSteps(audit)), "Repository next steps");
+      return true;
+    case "runbook":
+      await reply(request, runbookBlocks(generateRunbook(audit)), "Repository runbook");
+      return true;
+    case "owners":
+      await reply(request, reviewOwnersBlocks(suggestReviewOwners(audit)), "Suggested reviewers");
+      return true;
+  }
+}
+
 /** Routes one app mention and responds in the originating Slack thread. */
 export async function handleConversationalRequest(
   request: ConversationalRequest,
@@ -205,7 +277,7 @@ export async function handleConversationalRequest(
   });
 
   if (routed.intent === "help") {
-    await reply(request, conversationalHelpBlocks(), "How to talk to OpsPilot");
+    await reply(request, expandedHelpBlocks(), "How to talk to OpsPilot");
     return;
   }
 
@@ -222,6 +294,19 @@ export async function handleConversationalRequest(
   if (routed.intent === "repo_audit") {
     await auditFromConversation(request, routed.query);
     return;
+  }
+
+  if (
+    routed.intent === "repo_summary" ||
+    routed.intent === "risk_explain" ||
+    routed.intent === "test_plan" ||
+    routed.intent === "release_notes" ||
+    routed.intent === "next_steps" ||
+    routed.intent === "runbook" ||
+    routed.intent === "owners"
+  ) {
+    const handled = await replyWithRepoFollowup(request, routed.intent);
+    if (handled) return;
   }
 
   const context = await getLatestIncidentContext(request.teamId, request.channelId);
@@ -265,6 +350,7 @@ export async function handleConversationalRequest(
       );
       return;
     case "owner":
+    case "owners":
       await reply(
         request,
         conversationalOwnersBlocks(investigation),

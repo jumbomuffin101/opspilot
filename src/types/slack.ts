@@ -79,6 +79,13 @@ export type ConversationalIntent =
   | "postmortem"
   | "resolve"
   | "repo_audit"
+  | "repo_summary"
+  | "risk_explain"
+  | "test_plan"
+  | "release_notes"
+  | "owners"
+  | "next_steps"
+  | "runbook"
   | "help";
 
 export interface RoutedConversationalIntent {
