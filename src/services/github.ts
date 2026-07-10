@@ -6,6 +6,8 @@ import type { GitHubRepository } from "@/src/types/github";
 export interface GitHubServiceConfig {
   token: string;
   repository: GitHubRepository;
+  authSource: "workspace" | "environment";
+  repositorySource: "workspace" | "environment";
 }
 
 function getGitHubToken(): string | null {
@@ -49,5 +51,12 @@ export async function getGitHubServiceConfig(
   const token = workspaceToken ?? getGitHubToken();
   const repository = workspaceRepository ?? getEnvRepository();
 
-  return token && repository ? { token, repository } : null;
+  return token && repository
+    ? {
+        token,
+        repository,
+        authSource: workspaceToken ? "workspace" : "environment",
+        repositorySource: workspaceRepository ? "workspace" : "environment",
+      }
+    : null;
 }

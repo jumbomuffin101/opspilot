@@ -28,13 +28,23 @@ OpsPilot acknowledges immediately, gathers evidence through independent tools, a
 
 From the same message, responders can open an incident room with a kickoff checklist, generate a structured postmortem draft, or publish a resolved update.
 
+OpsPilot also supports repository intelligence. After installing OpsPilot into Slack, a workspace can connect GitHub through OAuth, choose a repository, and ask:
+
+```text
+@OpsPilot check my repo for issues
+@OpsPilot what should I test?
+@OpsPilot write release notes
+```
+
+Repository audit mode reviews recent commits, changed files, risky paths, config/security concerns, and validation steps without starting an incident workflow.
+
 ## How we built it
 
 OpsPilot uses Next.js App Router route handlers for signed Slack commands and interactions. An incident agent calls an evidence aggregator, which runs five typed tools concurrently: Slack search, GitHub, deployments, incident history, and ownership. Provider responses are normalized before reasoning, keeping the agent independent of individual APIs.
 
 In production mode, OpenAI can generate a JSON Schema-constrained investigation from the collected evidence. The result is independently validated before use. GitHub commit evidence can come from the live REST API, while the Slack search adapter is ready for a configured Real-Time Search endpoint.
 
-Every external integration has a deterministic fallback. Demo mode skips OpenAI, GitHub, RTS, and deployment-provider calls while preserving real Slack delivery and actions.
+Every external integration has a deterministic fallback. Demo mode skips OpenAI, GitHub, RTS, and deployment-provider calls while preserving real Slack delivery and actions. PostgreSQL stores Slack installations, GitHub installations, project configuration, and incident memory when `DATABASE_URL` is configured; the app falls back safely when it is not.
 
 ## Challenges
 
@@ -51,6 +61,8 @@ Every external integration has a deterministic fallback. Demo mode skips OpenAI,
 - Added partial-failure aggregation so one broken provider does not stop an investigation
 - Added structured AI reasoning with independent validation and deterministic fallback
 - Added live GitHub evidence with relevance ranking and safe degradation
+- Added Slack OAuth, per-workspace GitHub OAuth, repository picking, and persistent workspace setup
+- Added repository audit mode and follow-up repository intelligence
 - Created a deterministic checkout outage scenario that demonstrates enterprise incident response clearly
 - Kept the application deployable as a standard Vercel Next.js project
 
@@ -60,7 +72,7 @@ Operational agents need predictable failure behavior as much as strong reasoning
 
 ## What's next
 
-- Persistent incident state, idempotency, and audit trails
+- Action idempotency keys and durable audit trails
 - Production deployment-provider evidence
 - Workspace-specific Slack RTS authorization and citations
 - Durable background jobs and retries

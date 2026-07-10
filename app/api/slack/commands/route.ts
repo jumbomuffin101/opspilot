@@ -182,6 +182,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const command = parseOpsPilotCommand(payload.text);
+  logger.info("Slack slash command received", {
+    teamId: payload.teamId,
+    channelId: payload.channelId,
+    commandType: command.type,
+  });
   if (command.type === "unknown") {
     return slackResponse(unknownCommandBlocks(command.commandName));
   }

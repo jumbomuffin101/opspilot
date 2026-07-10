@@ -4,6 +4,8 @@
 
 - Set `DEMO_MODE=true`.
 - Confirm the Slack app is installed and `/opspilot` is configured.
+- Confirm the Add to Slack flow redirects through `/api/slack/install` and `/setup`.
+- Confirm GitHub OAuth and repository selection have been completed, or keep demo mode enabled for deterministic repository data.
 - Confirm command and interactivity URLs point to the deployed application.
 - Use a public demo channel where OpsPilot can post.
 - Remove or archive any existing `inc-checkout-api-0703` channel if you want to demonstrate fresh channel creation.
@@ -14,7 +16,7 @@
 
 “During an outage, responders lose critical minutes searching across Slack, deployments, commits, and ownership records. OpsPilot is an AI Incident Commander that assembles that evidence and coordinates the response without taking the team out of Slack.”
 
-Show the OpsPilot landing page briefly, then switch immediately to Slack. Emphasize that Slack is the primary interface.
+Show the OpsPilot landing page and command guide briefly: Add to Slack, connect GitHub, choose a repo, then work in Slack. Switch immediately to Slack and emphasize that Slack is the primary interface.
 
 ## 0:20–0:40 — Start a conversational investigation
 
@@ -52,6 +54,15 @@ Ask a follow-up in the same channel:
 ```
 
 Show the focused explanation and point out that OpsPilot reused the active incident instead of running another investigation.
+
+Optional repository-intelligence cutaway if you have 15 extra seconds:
+
+```text
+@OpsPilot check my repo for issues
+@OpsPilot what should I test?
+```
+
+Point out that repository audit mode is separate from incident mode: it reviews recent changes, risky files, config/security concerns, and validation steps without labeling the result as an incident.
 
 ## 1:30–2:05 — Open the incident room
 

@@ -193,6 +193,11 @@ async function replyFromRepoAuditContext(
   if (!context) return false;
 
   const audit = context.audit;
+  logger.info("Repo audit context selected", {
+    teamId: request.teamId,
+    channelId: request.channelId,
+    contextScope: context.threadTs === request.threadTs ? "thread" : "channel",
+  });
   if (kind === "risk") {
     await reply(request, repoAuditRiskExplanationBlocks(audit), "Highest-risk repository change");
     return true;
@@ -236,6 +241,11 @@ async function replyWithRepoFollowup(
   }
 
   const audit = context.audit;
+  logger.info("Repo audit follow-up context selected", {
+    teamId: request.teamId,
+    channelId: request.channelId,
+    contextScope: context.threadTs === request.threadTs ? "thread" : "channel",
+  });
   switch (intent) {
     case "repo_summary":
       await reply(request, repoSummaryBlocks(generateRepoSummary(audit)), "Repository summary");
@@ -286,11 +296,6 @@ export async function handleConversationalRequest(
     return;
   }
 
-  const auditFollowUpKind = repoAuditFollowUpKind(routed.intent, routed.query);
-  if (auditFollowUpKind && await replyFromRepoAuditContext(request, auditFollowUpKind)) {
-    return;
-  }
-
   if (routed.intent === "repo_audit") {
     await auditFromConversation(request, routed.query);
     return;
@@ -309,7 +314,16 @@ export async function handleConversationalRequest(
     if (handled) return;
   }
 
-  const context = await getLatestIncidentContext(request.teamId, request.channelId);
+  const auditFollowUpKind = repoAuditFollowUpKind(routed.intent, routed.query);
+  if (auditFollowUpKind && await replyFromRepoAuditContext(request, auditFollowUpKind)) {
+    return;
+  }
+
+  const context = await getLatestIncidentContext(
+    request.teamId,
+    request.channelId,
+    request.threadTs,
+  );
   if (!context) {
     await reply(
       request,
@@ -320,6 +334,12 @@ export async function handleConversationalRequest(
   }
 
   const investigation = context.investigation;
+  logger.info("Incident context selected", {
+    teamId: request.teamId,
+    channelId: request.channelId,
+    incidentId: investigation.id,
+    contextScope: context.threadTs === request.threadTs ? "thread" : "channel",
+  });
   switch (routed.intent) {
     case "summarize":
       await reply(

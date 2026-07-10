@@ -279,8 +279,9 @@ export async function getIncidentContext(
 export async function getLatestIncidentContext(
   workspaceId: string,
   channelId: string,
+  threadTs?: string,
 ): Promise<IncidentContext | null> {
-  return getIncidentContext(workspaceId, channelId);
+  return getIncidentContext(workspaceId, channelId, threadTs);
 }
 
 export async function updateIncidentStatus(

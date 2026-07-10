@@ -286,6 +286,11 @@ export class GitHubTool implements IncidentTool<GitHubToolResult> {
     }
 
     try {
+      logger.info("GitHubTool using real commit evidence", {
+        authSource: mode.config.authSource,
+        repositorySource: mode.config.repositorySource,
+        repository: `${mode.config.repository.owner}/${mode.config.repository.name}`,
+      });
       return { kind: "commits", commits: await fetchRealCommits(query, mode.config) };
     } catch (error) {
       const metadata: Record<string, unknown> = {

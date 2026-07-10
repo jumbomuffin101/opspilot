@@ -50,9 +50,9 @@ function formatEvidenceGroup(source: IncidentEvidenceSource, evidence: IncidentE
 
 function formatAuditChange(change: RepoAuditChange): string {
   const files = change.filesChanged.length
-    ? `\nFiles: ${change.filesChanged.slice(0, 4).map((file) => `\`${escapeMrkdwn(file)}\``).join(", ")}${change.filesChanged.length > 4 ? `, +${change.filesChanged.length - 4} more` : ""}`
+    ? `\nFiles: ${change.filesChanged.slice(0, 3).map((file) => `\`${escapeMrkdwn(file)}\``).join(", ")}${change.filesChanged.length > 3 ? `, +${change.filesChanged.length - 3} more` : ""}`
     : "\nFiles: _metadata unavailable_";
-  const reasons = change.reasons.length ? `\nSignals: ${change.reasons.slice(0, 2).map(escapeMrkdwn).join("; ")}` : "";
+  const reasons = change.reasons.length ? `\nSignal: ${escapeMrkdwn(change.reasons[0] ?? "")}` : "";
 
   return `\`${change.sha.slice(0, 7)}\` *${escapeMrkdwn(change.message)}* — ${escapeMrkdwn(change.author)} (${formatCompactTimestamp(change.committedAt)})${files}${reasons}`;
 }
@@ -296,13 +296,15 @@ export function repoAuditBlocks(result: RepoAuditResult): KnownBlock[] {
     ...result.highRiskChanges,
     ...result.mediumRiskChanges,
     ...result.lowRiskChanges,
-  ].slice(0, 5);
+  ].slice(0, 4);
   const highestRisk = result.highRiskChanges.length
-    ? result.highRiskChanges.map((change) => `${riskLabel(change.risk)} ${formatAuditChange(change)}`)
+    ? result.highRiskChanges.slice(0, 3).map((change) => `${riskLabel(change.risk)} ${formatAuditChange(change)}`)
     : result.mediumRiskChanges.slice(0, 2).map(
         (change) => `${riskLabel(change.risk)} ${formatAuditChange(change)}`,
       );
-  const concerns = [...result.configConcerns, ...result.securityConcerns];
+  const testActions = result.recommendedActions.slice(0, 3);
+  const configConcerns = result.configConcerns.slice(0, 3);
+  const securityConcerns = result.securityConcerns.slice(0, 3);
 
   return [
     {
@@ -314,7 +316,7 @@ export function repoAuditBlocks(result: RepoAuditResult): KnownBlock[] {
       text: {
         type: "mrkdwn",
         text: truncateSlackText(
-          `*Repo:* \`${escapeMrkdwn(result.repo.owner)}/${escapeMrkdwn(result.repo.name)}\`\n${formatConfidenceScore(result.confidenceScore)}\n\n*Summary*\n${escapeMrkdwn(result.summary)}`,
+          `*Repo:* \`${escapeMrkdwn(result.repo.owner)}/${escapeMrkdwn(result.repo.name)}\`\n${formatConfidenceScore(result.confidenceScore)}\n\n${escapeMrkdwn(result.summary)}`,
         ),
       },
     },
@@ -322,7 +324,7 @@ export function repoAuditBlocks(result: RepoAuditResult): KnownBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*Recent Changes Reviewed*\n${recentChanges.length ? toCompactBullets(recentChanges.map(formatAuditChange), 4) : "_No recent commits were available._"}`,
+        text: `*Recent Changes Reviewed*\n${recentChanges.length ? toCompactBullets(recentChanges.map(formatAuditChange), 3) : "_No recent commits were available._"}`,
       },
     },
     {
@@ -339,7 +341,7 @@ export function repoAuditBlocks(result: RepoAuditResult): KnownBlock[] {
       text: {
         type: "mrkdwn",
         text: truncateSlackText(
-          `*Config/Security Concerns*\n${concerns.length ? compactBullets(concerns, 5) : "_No obvious config or security concerns were found in recent changed-file metadata._"}`,
+          `*What to Test Next*\n${testActions.length ? compactBullets(testActions, 3) : "_Validate CI, deployment status, and production telemetry before rollout._"}`,
         ),
       },
     },
@@ -348,7 +350,7 @@ export function repoAuditBlocks(result: RepoAuditResult): KnownBlock[] {
       text: {
         type: "mrkdwn",
         text: truncateSlackText(
-          `*Recommended Actions*\n${compactBullets(result.recommendedActions, 5)}`,
+          `*Config / Security Concerns*\n*Config:* ${configConcerns.length ? `\n${compactBullets(configConcerns, 3)}` : "_No obvious config concerns._"}\n*Security:* ${securityConcerns.length ? `\n${compactBullets(securityConcerns, 3)}` : "_No obvious security concerns._"}`,
         ),
       },
     },
@@ -743,7 +745,7 @@ export function unknownCommandBlocks(commandName: string): KnownBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `I don't recognize ${displayedCommand}.\n\n*Available commands*\n• \`investigate <issue>\` — investigate an operational issue`,
+        text: `I don't recognize ${displayedCommand}.\n\n*Available commands*\n• \`investigate <issue>\` - investigate an operational issue\n• \`audit repo\` - review recent repository changes\n• \`summarize repo\` - summarize the latest repo audit\n• \`test plan\` - suggest validation steps\n• \`release notes\` - draft release notes\n• \`help\` - show the full menu`,
       },
     },
   ];

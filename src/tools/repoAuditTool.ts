@@ -95,6 +95,10 @@ function changedFilesAreDocsOrStyles(filesChanged: readonly string[]): boolean {
   );
 }
 
+function isDocumentationOrAsset(file: string): boolean {
+  return /(^docs\/|^README|\.md$|\.mdx$|\.css$|\.scss$|\.svg$|\.png$|\.jpg$|\.jpeg$)/i.test(file);
+}
+
 function classifyFile(file: string): {
   high: string[];
   medium: string[];
@@ -113,11 +117,15 @@ function classifyFile(file: string): {
   }
 
   if (/(migration|migrations|schema\.sql|\/db\/|database)/i.test(normalized)) {
-    high.push(`database schema or migration path: ${file}`);
-    config.push(`${file} may change persistence behavior or database shape.`);
+    high.push(`operational database or migration path: ${file}`);
+    config.push(`${file} may change persistence behavior, migration ordering, or database shape.`);
   }
 
-  if (/(\.env|config|next\.config|vercel\.json|dockerfile|package\.json|lock)$/i.test(normalized)) {
+  if (
+    /(^|\/)(\.env.*|.*config.*|next\.config\.[jt]s|vercel\.json|dockerfile|package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$/i.test(
+      normalized,
+    )
+  ) {
     high.push(`configuration or dependency path: ${file}`);
     config.push(`${file} may change runtime configuration, deployment behavior, or dependencies.`);
   }
@@ -234,8 +242,10 @@ function decodeContentPayload(value: unknown): string | null {
 
 function extractContentSignals(file: string, content: string): string[] {
   const signals: string[] = [];
+  if (isDocumentationOrAsset(file)) return signals;
+
   if (/process\.env|import\.meta\.env|NEXT_PUBLIC_|SLACK_|GITHUB_|OPENAI_|DATABASE_URL/.test(content)) {
-    signals.push(`${file} references environment variables or runtime secrets.`);
+    signals.push(`${file} references runtime environment variables or secret-backed configuration.`);
   }
   if (/oauth|token|secret|authorization|bearer/i.test(content)) {
     signals.push(`${file} contains auth, OAuth, token, or authorization logic.`);
@@ -278,6 +288,7 @@ async function fetchCommitDetail(
 
   for (const file of filesChanged.slice(0, 8)) {
     if (remainingContentFetches.count <= 0) break;
+    if (isDocumentationOrAsset(file)) continue;
     if (!/\.(ts|tsx|js|jsx|json|sql|yml|yaml|env|toml|md)$/i.test(file)) continue;
 
     remainingContentFetches.count -= 1;
@@ -412,12 +423,17 @@ export class RepoAuditTool implements IncidentTool<RepoAuditResult> {
     }
 
     const config = await getGitHubServiceConfig(query.teamId);
-    if (!config) {
+  if (!config) {
       logger.info("RepoAuditTool using mock repository audit", { reason: "missing_configuration" });
       return getMockAudit();
     }
 
     try {
+      logger.info("RepoAuditTool using real repository audit", {
+        authSource: config.authSource,
+        repositorySource: config.repositorySource,
+        repository: `${config.repository.owner}/${config.repository.name}`,
+      });
       return await fetchRealAudit(query, config);
     } catch (error) {
       const metadata: Record<string, unknown> = {

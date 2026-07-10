@@ -20,7 +20,8 @@ flowchart TB
         ActionRoute["POST /api/slack/actions"]
         Verify["HMAC signature verification"]
         IntentRouter["Intent Router"]
-        Context["In-memory IncidentContext"]
+        Context["Persistent incident memory"]
+        Workspace["Workspace installation/config stores"]
         Agent["Incident Agent"]
         Aggregator["Evidence Aggregator"]
         Registry["Tool Registry"]
@@ -71,6 +72,7 @@ flowchart TB
     EventsRoute --> IntentRouter
     IntentRouter --> Context
     Context --> Agent
+    Workspace --> GitHubTool
 ```
 
 ## Slack command flow
@@ -89,9 +91,19 @@ Slash-command payloads do not provide the acknowledgement message timestamp. Bec
 2. The route validates the raw request signature, handles URL verification, suppresses duplicate event IDs, and returns `200` immediately.
 3. Processing continues through Next.js `after()`, and responses use `event.thread_ts` or the mention's `ts` as the thread root.
 4. A deterministic intent router recognizes investigate, summarize, explain, status, timeline, owner, deployments, evidence, postmortem, resolve, and help requests.
-5. Investigations call the existing incident agent and store an `IncidentContext` keyed by workspace and channel. Follow-up intents render focused views of that same investigation.
+5. Investigations call the existing incident agent and store an `IncidentContext` keyed by workspace, channel, and thread when available. Follow-up intents prefer thread context, then channel context.
 
-The context store is bounded to 100 entries with a 12-hour TTL. It uses process memory for this stage, so production continuity across cold starts requires a shared durable store.
+When `DATABASE_URL` is configured, incident memory is stored in PostgreSQL with a 12-hour expiration window. If the database is missing or unavailable, the app falls back to the bounded in-memory store instead of failing Slack responses.
+
+## Workspace onboarding and repository configuration
+
+The public product flow starts at Add to Slack:
+
+```text
+Homepage -> /api/slack/install -> Slack OAuth -> /setup -> GitHub OAuth -> /setup/github -> /setup/success
+```
+
+Slack installations are stored in `slack_installations`, GitHub OAuth tokens in `github_installations`, and repository/service configuration in `project_configs`. Tokens stay server-side and are never returned to frontend pages or Slack messages.
 
 ## Tool orchestration flow
 
@@ -117,11 +129,15 @@ The model is instructed to use only supplied evidence. Its response must match t
 
 ## GitHub and Slack RTS-ready integrations
 
-`GitHubTool` uses live GitHub data only when demo mode is off and all repository credentials exist. It retrieves ten recent commits, enriches the newest three with changed files, calculates issue/service relevance, and falls back to mock signals on any failure.
+`GitHubTool` uses live GitHub data only when demo mode is off and credentials exist. It prefers the workspace GitHub OAuth token and workspace-selected repository, then falls back to deployment-wide `GITHUB_TOKEN` plus `GITHUB_OWNER` / `GITHUB_REPO`, then deterministic mock signals. It retrieves ten recent commits, enriches the newest three with changed files, calculates issue/service relevance, and falls back to mock signals on any failure.
 
 `SlackSearchTool` uses live search only when demo mode is off, RTS is explicitly enabled, and endpoint credentials exist. `slackRealTimeSearch.ts` maps Slack's official `results.messages` response and conservative proxy variants from `unknown` using type guards. Empty, malformed, failed, or timed-out requests fall back to mock history.
 
 The agent and aggregator see the same evidence contracts regardless of source.
+
+## Repository audit flow
+
+Repository audit is intentionally separate from incident investigation. `/opspilot audit repo` and natural-language requests such as `@OpsPilot check my repo for issues` call `RepoAuditTool`, which reviews recent commits, changed files, risky file patterns, package/config changes, migration files, auth/security paths, and API route changes. Follow-ups such as `@OpsPilot what should I test?` reuse the latest repo-audit context without rerunning GitHub unless the user requests a fresh audit.
 
 ## Demo mode behavior
 
@@ -147,4 +163,4 @@ Button values contain a compact, validated incident context under Slack's value 
 - **Draft Postmortem:** reconstructs deterministic incident data and posts a structured draft.
 - **Resolve Incident:** posts the final status and follow-up reminder.
 
-Persistent incident state and idempotency are planned production hardening items. MCP is intentionally not implemented yet; future MCP tools can sit behind the existing `IncidentTool` boundary.
+Persistent incident state is implemented with PostgreSQL fallback to memory. Action idempotency is still a planned hardening item. MCP is intentionally not implemented yet; future MCP tools can sit behind the existing `IncidentTool` boundary.

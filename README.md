@@ -45,6 +45,7 @@ OpsPilot has a single product onboarding path:
 Add to Slack
 → Slack OAuth
 → Project setup
+→ Connect GitHub and choose a repository
 → Use OpsPilot in Slack
 ```
 
@@ -67,6 +68,13 @@ Slack OAuth, per-workspace GitHub OAuth, repository picking, and project configu
 | `postmortem` | `@OpsPilot draft the postmortem` |
 | `resolve` | `@OpsPilot mark the incident resolved` |
 | `repo_audit` | `@OpsPilot review recent changes` |
+| `repo_summary` | `@OpsPilot summarize this repo` |
+| `risk_explain` | `@OpsPilot explain the highest risk change` |
+| `test_plan` | `@OpsPilot what should I test?` |
+| `release_notes` | `@OpsPilot write release notes` |
+| `next_steps` | `@OpsPilot what should we do next?` |
+| `runbook` | `@OpsPilot create a rollback runbook` |
+| `owners` | `@OpsPilot who should review this?` |
 | `help` | `@OpsPilot help` |
 
 ## Features
@@ -469,6 +477,7 @@ Submission assets:
 - [Devpost copy](docs/devpost.md)
 - [Three-minute demo script](docs/demo-script.md)
 - [Architecture source](docs/architecture.md)
+- [Final QA checklist](docs/final-qa-checklist.md)
 
 ## License
 
