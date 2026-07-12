@@ -4,6 +4,8 @@
 
 - Set `DEMO_MODE=true`.
 - Confirm the Slack app is installed and `/opspilot` is configured.
+- Confirm Agents & AI Apps is enabled for the Slack app.
+- Confirm `assistant_thread_started` and `assistant_thread_context_changed` bot events are subscribed.
 - Confirm the Add to Slack flow redirects through `/api/slack/install` and `/setup`.
 - Confirm GitHub OAuth and repository selection have been completed, or keep demo mode enabled for deterministic repository data.
 - Confirm command and interactivity URLs point to the deployed application.
@@ -16,9 +18,25 @@
 
 “During an outage, responders lose critical minutes searching across Slack, deployments, commits, and ownership records. OpsPilot is an AI Incident Commander that assembles that evidence and coordinates the response without taking the team out of Slack.”
 
-Show the OpsPilot landing page and command guide briefly: Add to Slack, connect GitHub, choose a repo, then work in Slack. Switch immediately to Slack and emphasize that Slack is the primary interface.
+Show the OpsPilot landing page and command guide briefly: Add to Slack, connect GitHub, choose a repo, then work in Slack. Switch immediately to Slack and emphasize that the recommended path is Slack's agent experience, with mentions and `/opspilot` still available.
 
-## 0:20–0:40 — Start a conversational investigation
+## 0:20–0:40 — Start from Slack's agent surface
+
+Open OpsPilot from Slack's agent/assistant surface.
+
+**Say:**
+
+"OpsPilot uses Slack's official agent experience. When the assistant thread starts, it shows suggested prompts for investigation, repository audit, test planning, and release notes."
+
+Point out the suggested prompts. Then use the incident prompt or type:
+
+```text
+Investigate checkout failures after the latest deploy
+```
+
+Point out the assistant status updates as they change: searching incident context, reviewing deployments and code changes, and generating the incident brief. Mention that OpsPilot sets a contextual thread title such as "Checkout incident investigation."
+
+## 0:40–0:55 — Show mention fallback
 
 Mention OpsPilot:
 
@@ -28,11 +46,11 @@ Mention OpsPilot:
 
 **Say:**
 
-“A responder reports the issue in natural language. OpsPilot acknowledges the signed app-mention event immediately and investigates asynchronously in a thread. The slash command remains available.”
+"The same conversational engine also works from `@OpsPilot` mentions in channels or threads. The slash command remains available."
 
 Point out the requester, issue text, and investigating status.
 
-## 0:40–1:30 — Walk through the investigation
+## 0:55–1:30 — Walk through the investigation
 
 When the incident brief appears, highlight in this order:
 

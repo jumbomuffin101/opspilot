@@ -15,11 +15,24 @@ Use this checklist before recording the demo, deploying to production, or submit
 - [ ] Reinstalling the Slack app updates the existing workspace installation row.
 - [ ] OAuth redirect URL is configured as `/api/slack/oauth/callback`.
 - [ ] Required scopes are present: `commands`, `chat:write`, `channels:manage`, `channels:read`, `groups:read`, `users:read`, `app_mentions:read`.
+- [ ] Agents & AI Apps is enabled in the Slack developer dashboard.
 - [ ] Slash command `/opspilot` points to `/api/slack/commands`.
 - [ ] Interactivity points to `/api/slack/actions`.
 - [ ] Event Subscriptions point to `/api/slack/events`.
-- [ ] `app_mention` bot event is subscribed.
+- [ ] Bot events are subscribed: `app_mention`, `assistant_thread_started`, `assistant_thread_context_changed`.
 - [ ] Invalid Slack signatures are rejected.
+
+## Slack agent experience
+
+- [ ] Open OpsPilot from Slack's agent/assistant surface.
+- [ ] Suggested prompts appear when the assistant thread starts.
+- [ ] Start an incident investigation from an assistant prompt or natural-language message.
+- [ ] Assistant status updates appear while work is processing.
+- [ ] Final incident result appears in the assistant thread.
+- [ ] Assistant thread title updates contextually.
+- [ ] Ask a repository audit question from the assistant thread.
+- [ ] Ask a contextual follow-up from the assistant thread.
+- [ ] Assistant failures clear status and post a concise retry/help message.
 
 ## GitHub
 
@@ -88,6 +101,7 @@ Use this checklist before recording the demo, deploying to production, or submit
 - [ ] Set `DEMO_MODE=true` for judging reliability.
 - [ ] Run `/opspilot help` and confirm command menu is concise.
 - [ ] Run `@OpsPilot help` and confirm command menu is concise.
+- [ ] Open OpsPilot from Slack's agent surface and confirm suggested prompts appear.
 - [ ] Run the checkout incident investigation path.
 - [ ] Run Create Incident Channel, Generate Postmortem, and Mark Resolved.
 - [ ] Run `/opspilot audit repo`.

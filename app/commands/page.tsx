@@ -6,6 +6,7 @@ import { BrandMark } from "@/components/home/BrandMark";
 import {
   incidentResponseCommands,
   repositoryIntelligenceCommands,
+  usageModeCommands,
 } from "@/src/lib/commandGuide";
 
 const startSteps = [
@@ -18,8 +19,8 @@ const startSteps = [
     description: "Authorize GitHub and select the repository OpsPilot should inspect.",
   },
   {
-    title: "Run your first investigation",
-    description: "Mention OpsPilot in a channel or thread, or use the /opspilot slash command.",
+    title: "Open the Slack agent",
+    description: "Use Slack's agent experience for suggested prompts, live status, and contextual thread titles.",
   },
 ] as const;
 
@@ -100,7 +101,7 @@ export default function CommandsPage() {
             </h1>
             <p className="mt-5 text-lg leading-8 text-slate-400">
               Install OpsPilot in Slack, connect your GitHub repo, then use these
-              commands in channels or threads.
+              commands from Slack&apos;s agent surface, channels, or threads.
             </p>
           </div>
         </section>
@@ -120,7 +121,18 @@ export default function CommandsPage() {
             </div>
           </Section>
 
-          <Section eyebrow="B" title="Incident Response Commands">
+          <Section eyebrow="B" title="Ways to Use OpsPilot">
+            <div className="grid gap-3 md:grid-cols-3">
+              {usageModeCommands.map((command) => (
+                <div key={command.label} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <p className="text-sm font-semibold text-cyan-100">{command.label}</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">{command.description}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section eyebrow="C" title="Incident Response Commands">
             <div className="grid gap-3 md:grid-cols-2">
               {incidentCommands.map((command) => (
                 <CommandCard key={command} command={command} />
@@ -132,7 +144,7 @@ export default function CommandsPage() {
             </p>
           </Section>
 
-          <Section eyebrow="C" title="Repository Intelligence Commands">
+          <Section eyebrow="D" title="Repository Intelligence Commands">
             <div className="grid gap-3 md:grid-cols-2">
               {repositoryCommands.map((command) => (
                 <CommandCard key={command} command={command} />
@@ -144,7 +156,7 @@ export default function CommandsPage() {
             </p>
           </Section>
 
-          <Section eyebrow="D" title="Follow-up Questions">
+          <Section eyebrow="E" title="Follow-up Questions">
             <p className="max-w-3xl text-sm leading-7 text-slate-400">
               OpsPilot remembers the latest incident or repository audit in the current
               Slack channel/thread. Ask follow-up questions in that context instead of
@@ -152,7 +164,7 @@ export default function CommandsPage() {
             </p>
           </Section>
 
-          <Section eyebrow="E" title="Best Practices">
+          <Section eyebrow="F" title="Best Practices">
             <ul className="grid gap-3 text-sm leading-6 text-slate-400 md:grid-cols-2">
               <li className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 Invite OpsPilot to incident channels before high-pressure moments.

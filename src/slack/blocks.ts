@@ -830,6 +830,13 @@ export function expandedHelpBlocks(): KnownBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
+        text: "*Recommended:* open OpsPilot from Slack's agent/assistant surface for suggested prompts, live status, and contextual thread titles.\n\nYou can also mention `@OpsPilot` in a channel/thread or use `/opspilot` slash commands.",
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
         text: `*Incident Response*\n${commandList(incidentResponseCommands)}`,
       },
     },

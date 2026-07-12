@@ -106,12 +106,45 @@ export interface SlackAppMentionEvent {
   subtype?: string;
 }
 
+export interface SlackMessageEvent {
+  type: "message" | "assistant_thread_message";
+  user: string;
+  text: string;
+  channel: string;
+  ts: string;
+  thread_ts?: string;
+  event_ts?: string;
+  channel_type?: string;
+  bot_id?: string;
+  subtype?: string;
+}
+
+export interface SlackAssistantThreadStartedEvent {
+  type: "assistant_thread_started";
+  channel: string;
+  thread_ts: string;
+  user?: string;
+}
+
+export interface SlackAssistantThreadContextChangedEvent {
+  type: "assistant_thread_context_changed";
+  channel: string;
+  thread_ts: string;
+  user?: string;
+}
+
+export type SlackSupportedEvent =
+  | SlackAppMentionEvent
+  | SlackMessageEvent
+  | SlackAssistantThreadStartedEvent
+  | SlackAssistantThreadContextChangedEvent;
+
 export interface SlackEventCallbackEnvelope {
   type: "event_callback";
   team_id: string;
   event_id: string;
   event_time?: number;
-  event: SlackAppMentionEvent;
+  event: SlackSupportedEvent;
 }
 
 export interface SlackUrlVerificationPayload {

@@ -2,7 +2,7 @@
 
 ## Project summary
 
-OpsPilot is an AI Incident Commander that lives in Slack. One slash command turns an operational report into a concise incident brief with severity, impact, correlated evidence, likely root causes, practical next actions, owners, and an update deadline. Interactive buttons then create an incident room, draft a postmortem, or mark the incident resolved.
+OpsPilot is an AI Incident Commander that lives in Slack. Teams can open it from Slack's official agent surface, mention it in a channel, or use `/opspilot`. One request turns an operational report into a concise incident brief with severity, impact, correlated evidence, likely root causes, practical next actions, owners, and an update deadline. Interactive buttons then create an incident room, draft a postmortem, or mark the incident resolved.
 
 ## Inspiration
 
@@ -42,6 +42,8 @@ Repository audit mode reviews recent commits, changed files, risky paths, config
 
 OpsPilot uses Next.js App Router route handlers for signed Slack commands and interactions. An incident agent calls an evidence aggregator, which runs five typed tools concurrently: Slack search, GitHub, deployments, incident history, and ownership. Provider responses are normalized before reasoning, keeping the agent independent of individual APIs.
 
+For Slack's Agents & AI Apps experience, OpsPilot handles assistant-thread events, sets suggested prompts, displays live assistant status updates during long-running work, and sets contextual assistant thread titles. The same intent router powers assistant threads, app mentions, and slash-command workflows where appropriate.
+
 In production mode, OpenAI can generate a JSON Schema-constrained investigation from the collected evidence. The result is independently validated before use. GitHub commit evidence can come from the live REST API, while the Slack search adapter is ready for a configured Real-Time Search endpoint.
 
 Every external integration has a deterministic fallback. Demo mode skips OpenAI, GitHub, RTS, and deployment-provider calls while preserving real Slack delivery and actions. PostgreSQL stores Slack installations, GitHub installations, project configuration, and incident memory when `DATABASE_URL` is configured; the app falls back safely when it is not.
@@ -57,6 +59,7 @@ Every external integration has a deterministic fallback. Demo mode skips OpenAI,
 ## Accomplishments
 
 - Built a complete command-to-resolution Slack workflow
+- Added Slack assistant threads with suggested prompts, live status updates, and contextual titles
 - Isolated evidence providers behind strongly typed tools
 - Added partial-failure aggregation so one broken provider does not stop an investigation
 - Added structured AI reasoning with independent validation and deterministic fallback
@@ -81,7 +84,7 @@ Operational agents need predictable failure behavior as much as strong reasoning
 
 ## Built with
 
-Slack Platform, Block Kit, Slack Web API, Next.js 16, React 19, TypeScript, Tailwind CSS, OpenAI Responses API, GitHub REST API, and Vercel.
+Slack Platform, Slack Agents & AI Apps, Block Kit, Slack Web API, Next.js 16, React 19, TypeScript, Tailwind CSS, OpenAI Responses API, GitHub REST API, and Vercel.
 
 ## Track fit
 
@@ -95,7 +98,7 @@ OpsPilot reduces the time between incident report and coordinated response by as
 
 ### Quality of the Slack experience
 
-The workflow uses immediate acknowledgement, readable Block Kit hierarchy, concise evidence, clear update timing, and action buttons that complete real incident tasks.
+The workflow uses Slack's agent surface, suggested prompts, live assistant status, contextual thread titles, readable Block Kit hierarchy, concise evidence, clear update timing, and action buttons that complete real incident tasks.
 
 ### Technical implementation
 

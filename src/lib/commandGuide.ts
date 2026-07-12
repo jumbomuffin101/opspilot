@@ -9,6 +9,21 @@ export interface CommandGuideCategory {
   commands: CommandGuideItem[];
 }
 
+export const usageModeCommands: CommandGuideItem[] = [
+  {
+    label: "Open OpsPilot from Slack's agent surface",
+    description: "Recommended path for guided prompts, live status, and contextual thread titles.",
+  },
+  {
+    label: "@OpsPilot investigate checkout failures",
+    description: "Mention OpsPilot in any channel or thread where responders are working.",
+  },
+  {
+    label: "/opspilot investigate checkout API is failing",
+    description: "Launch a workflow with the slash command when you prefer command syntax.",
+  },
+];
+
 export const incidentResponseCommands: CommandGuideItem[] = [
   {
     label: "@OpsPilot investigate checkout failures",
@@ -71,6 +86,11 @@ export const slashCommandAlternatives: CommandGuideItem[] = [
 ];
 
 export const commandGuideCategories: CommandGuideCategory[] = [
+  {
+    title: "Ways to Use OpsPilot",
+    description: "Start in Slack's agent experience, mention OpsPilot, or use slash commands.",
+    commands: usageModeCommands,
+  },
   {
     title: "Incident Response",
     description: "Use these during outages, degraded services, and active incident threads.",

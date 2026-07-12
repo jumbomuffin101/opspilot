@@ -21,6 +21,12 @@ import {
 } from "@/src/agents/repoAuditContext";
 import { logger } from "@/src/lib/logger";
 import {
+  clearAssistantStatus,
+  postAssistantResponse,
+  setAssistantStatus,
+  setAssistantThreadTitle,
+} from "@/src/slack/assistant";
+import {
   conversationalDeploymentsBlocks,
   conversationalEvidenceBlocks,
   conversationalExplanationBlocks,
@@ -60,6 +66,7 @@ export interface ConversationalRequest {
   userId: string;
   text: string;
   threadTs: string;
+  surface?: "mention" | "assistant";
 }
 
 async function reply(
@@ -67,13 +74,73 @@ async function reply(
   blocks: KnownBlock[],
   fallbackText: string,
 ): Promise<void> {
-  await postMessage(
-    request.channelId,
-    blocks,
-    fallbackText,
-    request.threadTs,
-    request.teamId,
-  );
+  if (request.surface === "assistant") {
+    await postAssistantResponse(
+      {
+        teamId: request.teamId,
+        channelId: request.channelId,
+        threadTs: request.threadTs,
+      },
+      blocks,
+      fallbackText,
+    );
+    return;
+  }
+
+  await postMessage(request.channelId, blocks, fallbackText, request.threadTs, request.teamId);
+}
+
+async function updateAssistantStatus(
+  request: ConversationalRequest,
+  status: string,
+): Promise<void> {
+  if (request.surface !== "assistant") return;
+
+  await setAssistantStatus({
+    teamId: request.teamId,
+    channelId: request.channelId,
+    threadTs: request.threadTs,
+    status,
+  });
+}
+
+async function clearStatus(request: ConversationalRequest): Promise<void> {
+  if (request.surface !== "assistant") return;
+
+  await clearAssistantStatus({
+    teamId: request.teamId,
+    channelId: request.channelId,
+    threadTs: request.threadTs,
+  });
+}
+
+function assistantThreadTitleForIntent(intent: string): string | null {
+  if (intent === "investigate") return "Checkout incident investigation";
+  if (intent === "repo_audit" || intent === "repo_summary" || intent === "risk_explain") {
+    return "OpsPilot repository audit";
+  }
+  if (intent === "test_plan") return "Release test plan";
+  if (intent === "postmortem") return "Incident postmortem";
+  if (intent === "release_notes") return "Release notes";
+  if (intent === "runbook") return "Rollback runbook";
+  return null;
+}
+
+async function updateAssistantThreadTitle(
+  request: ConversationalRequest,
+  intent: string,
+): Promise<void> {
+  if (request.surface !== "assistant") return;
+
+  const title = assistantThreadTitleForIntent(intent);
+  if (!title) return;
+
+  await setAssistantThreadTitle({
+    teamId: request.teamId,
+    channelId: request.channelId,
+    threadTs: request.threadTs,
+    title,
+  });
 }
 
 async function investigateFromConversation(
@@ -85,6 +152,7 @@ async function investigateFromConversation(
     return;
   }
 
+  await updateAssistantStatus(request, "Searching incident context...");
   await reply(
     request,
     investigationStartedBlocks(issueText, request.userId),
@@ -92,6 +160,7 @@ async function investigateFromConversation(
   );
 
   try {
+    await updateAssistantStatus(request, "Reviewing deployments and code changes...");
     const investigation = await investigateIncident(issueText, { teamId: request.teamId });
     await saveIncidentContext({
       teamId: request.teamId,
@@ -101,6 +170,7 @@ async function investigateFromConversation(
       issueText,
       investigation,
     });
+    await updateAssistantStatus(request, "Generating incident brief...");
     await reply(
       request,
       investigationResultBlocks(investigation, {
@@ -130,6 +200,7 @@ async function auditFromConversation(
   requestText: string,
 ): Promise<void> {
   const auditText = requestText || "audit this repository";
+  await updateAssistantStatus(request, "Loading connected repository...");
   await reply(
     request,
     repoAuditStartedBlocks(auditText, request.userId),
@@ -137,6 +208,7 @@ async function auditFromConversation(
   );
 
   try {
+    await updateAssistantStatus(request, "Reviewing recent commits and changed files...");
     const audit = await auditRepository(auditText, { teamId: request.teamId });
     await saveRepoAuditContext({
       teamId: request.teamId,
@@ -146,6 +218,7 @@ async function auditFromConversation(
       requestText: auditText,
       audit,
     });
+    await updateAssistantStatus(request, "Preparing risk assessment...");
     await reply(
       request,
       repoAuditBlocks(audit),
@@ -284,137 +357,149 @@ export async function handleConversationalRequest(
     teamId: request.teamId,
     channelId: request.channelId,
     intent: routed.intent,
+    surface: request.surface ?? "mention",
   });
 
-  if (routed.intent === "help") {
-    await reply(request, expandedHelpBlocks(), "How to talk to OpsPilot");
-    return;
-  }
+  try {
+    await updateAssistantThreadTitle(request, routed.intent);
 
-  if (routed.intent === "investigate") {
-    await investigateFromConversation(request, routed.query);
-    return;
-  }
+    if (routed.intent === "help") {
+      await reply(request, expandedHelpBlocks(), "How to talk to OpsPilot");
+      return;
+    }
 
-  if (routed.intent === "repo_audit") {
-    await auditFromConversation(request, routed.query);
-    return;
-  }
+    if (routed.intent === "investigate") {
+      await investigateFromConversation(request, routed.query);
+      return;
+    }
 
-  if (
-    routed.intent === "repo_summary" ||
-    routed.intent === "risk_explain" ||
-    routed.intent === "test_plan" ||
-    routed.intent === "release_notes" ||
-    routed.intent === "next_steps" ||
-    routed.intent === "runbook" ||
-    routed.intent === "owners"
-  ) {
-    const handled = await replyWithRepoFollowup(request, routed.intent);
-    if (handled) return;
-  }
+    if (routed.intent === "repo_audit") {
+      await auditFromConversation(request, routed.query);
+      return;
+    }
 
-  const auditFollowUpKind = repoAuditFollowUpKind(routed.intent, routed.query);
-  if (auditFollowUpKind && await replyFromRepoAuditContext(request, auditFollowUpKind)) {
-    return;
-  }
+    if (
+      routed.intent === "repo_summary" ||
+      routed.intent === "risk_explain" ||
+      routed.intent === "test_plan" ||
+      routed.intent === "release_notes" ||
+      routed.intent === "next_steps" ||
+      routed.intent === "runbook" ||
+      routed.intent === "owners"
+    ) {
+      await updateAssistantStatus(request, "Reviewing the active context...");
+      const handled = await replyWithRepoFollowup(request, routed.intent);
+      if (handled) return;
+    }
 
-  const context = await getLatestIncidentContext(
-    request.teamId,
-    request.channelId,
-    request.threadTs,
-  );
-  if (!context) {
-    await reply(
-      request,
-      noActiveIncidentBlocks(),
-      "No active incident. Ask OpsPilot to investigate first.",
+    const auditFollowUpKind = repoAuditFollowUpKind(routed.intent, routed.query);
+    if (auditFollowUpKind) {
+      await updateAssistantStatus(request, "Reviewing the active context...");
+    }
+    if (auditFollowUpKind && await replyFromRepoAuditContext(request, auditFollowUpKind)) {
+      return;
+    }
+
+    await updateAssistantStatus(request, "Reviewing the active context...");
+    const context = await getLatestIncidentContext(
+      request.teamId,
+      request.channelId,
+      request.threadTs,
     );
-    return;
-  }
-
-  const investigation = context.investigation;
-  logger.info("Incident context selected", {
-    teamId: request.teamId,
-    channelId: request.channelId,
-    incidentId: investigation.id,
-    contextScope: context.threadTs === request.threadTs ? "thread" : "channel",
-  });
-  switch (routed.intent) {
-    case "summarize":
+    if (!context) {
       await reply(
         request,
-        conversationalSummaryBlocks(investigation, routed.executiveSummary),
-        `Summary of ${investigation.id}`,
-      );
-      return;
-    case "explain":
-      await reply(
-        request,
-        conversationalExplanationBlocks(investigation),
-        `Leading hypothesis for ${investigation.id}`,
-      );
-      return;
-    case "status":
-      await reply(
-        request,
-        conversationalStatusBlocks(investigation),
-        `Status of ${investigation.id}`,
-      );
-      return;
-    case "timeline":
-      await reply(
-        request,
-        conversationalTimelineBlocks(investigation),
-        `Timeline for ${investigation.id}`,
-      );
-      return;
-    case "owner":
-    case "owners":
-      await reply(
-        request,
-        conversationalOwnersBlocks(investigation),
-        `Owners for ${investigation.service}`,
-      );
-      return;
-    case "deployments":
-      await reply(
-        request,
-        conversationalDeploymentsBlocks(investigation),
-        `Deployments related to ${investigation.id}`,
-      );
-      return;
-    case "evidence":
-      await reply(
-        request,
-        conversationalEvidenceBlocks(investigation),
-        `Evidence for ${investigation.id}`,
-      );
-      return;
-    case "postmortem":
-      await reply(
-        request,
-        postmortemDraftBlocks(investigation),
-        `Postmortem draft for ${investigation.id}`,
-      );
-      return;
-    case "resolve": {
-      const resolvedContext = await updateIncidentStatus(
-        request.teamId,
-        request.channelId,
-        investigation.id,
-        "resolved",
-      );
-      const resolvedInvestigation = resolvedContext?.investigation ?? {
-        ...investigation,
-        status: "resolved" as const,
-      };
-      await reply(
-        request,
-        resolvedStatusBlocks(resolvedInvestigation, request.userId),
-        `${resolvedInvestigation.id} resolved`,
+        noActiveIncidentBlocks(),
+        "No active incident. Ask OpsPilot to investigate first.",
       );
       return;
     }
+
+    const investigation = context.investigation;
+    logger.info("Incident context selected", {
+      teamId: request.teamId,
+      channelId: request.channelId,
+      incidentId: investigation.id,
+      contextScope: context.threadTs === request.threadTs ? "thread" : "channel",
+    });
+    switch (routed.intent) {
+      case "summarize":
+        await reply(
+          request,
+          conversationalSummaryBlocks(investigation, routed.executiveSummary),
+          `Summary of ${investigation.id}`,
+        );
+        return;
+      case "explain":
+        await reply(
+          request,
+          conversationalExplanationBlocks(investigation),
+          `Leading hypothesis for ${investigation.id}`,
+        );
+        return;
+      case "status":
+        await reply(
+          request,
+          conversationalStatusBlocks(investigation),
+          `Status of ${investigation.id}`,
+        );
+        return;
+      case "timeline":
+        await reply(
+          request,
+          conversationalTimelineBlocks(investigation),
+          `Timeline for ${investigation.id}`,
+        );
+        return;
+      case "owner":
+      case "owners":
+        await reply(
+          request,
+          conversationalOwnersBlocks(investigation),
+          `Owners for ${investigation.service}`,
+        );
+        return;
+      case "deployments":
+        await reply(
+          request,
+          conversationalDeploymentsBlocks(investigation),
+          `Deployments related to ${investigation.id}`,
+        );
+        return;
+      case "evidence":
+        await reply(
+          request,
+          conversationalEvidenceBlocks(investigation),
+          `Evidence for ${investigation.id}`,
+        );
+        return;
+      case "postmortem":
+        await reply(
+          request,
+          postmortemDraftBlocks(investigation),
+          `Postmortem draft for ${investigation.id}`,
+        );
+        return;
+      case "resolve": {
+        const resolvedContext = await updateIncidentStatus(
+          request.teamId,
+          request.channelId,
+          investigation.id,
+          "resolved",
+        );
+        const resolvedInvestigation = resolvedContext?.investigation ?? {
+          ...investigation,
+          status: "resolved" as const,
+        };
+        await reply(
+          request,
+          resolvedStatusBlocks(resolvedInvestigation, request.userId),
+          `${resolvedInvestigation.id} resolved`,
+        );
+        return;
+      }
+    }
+  } finally {
+    await clearStatus(request);
   }
 }

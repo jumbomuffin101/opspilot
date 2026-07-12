@@ -35,7 +35,7 @@ export class SlackApiError extends Error {
   }
 }
 
-async function callSlackApi<T extends SlackApiResponse>(
+export async function callSlackApi<T extends SlackApiResponse>(
   method: string,
   body: Record<string, unknown>,
   teamId?: string,

@@ -1,10 +1,17 @@
 import { after, NextResponse } from "next/server";
 
 import { logger } from "@/src/lib/logger";
+import {
+  clearAssistantStatus,
+  postAssistantResponse,
+  setAssistantSuggestedPrompts,
+} from "@/src/slack/assistant";
+import { actionErrorBlocks } from "@/src/slack/blocks";
 import { handleConversationalRequest } from "@/src/slack/conversation";
 import { verifySlackRequest } from "@/src/slack/middleware";
 import type {
   SlackEventCallbackEnvelope,
+  SlackSupportedEvent,
   SlackUrlVerificationPayload,
 } from "@/src/types/slack";
 
@@ -28,6 +35,101 @@ function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function nestedRecord(value: unknown, key: string): UnknownRecord | null {
+  if (!isRecord(value)) return null;
+  const nested = value[key];
+  return isRecord(nested) ? nested : null;
+}
+
+function eventChannel(event: UnknownRecord): string | undefined {
+  const thread = nestedRecord(event, "assistant_thread");
+  return (
+    optionalString(event.channel) ??
+    optionalString(event.channel_id) ??
+    optionalString(thread?.channel) ??
+    optionalString(thread?.channel_id)
+  );
+}
+
+function eventThreadTs(event: UnknownRecord): string | undefined {
+  const thread = nestedRecord(event, "assistant_thread");
+  return (
+    optionalString(event.thread_ts) ??
+    optionalString(event.ts) ??
+    optionalString(thread?.thread_ts)
+  );
+}
+
+function eventUser(event: UnknownRecord): string | undefined {
+  return optionalString(event.user) ?? optionalString(event.user_id);
+}
+
+function parseSupportedEvent(event: UnknownRecord): SlackSupportedEvent | null {
+  const type = optionalString(event.type);
+  if (!type) return null;
+
+  if (type === "app_mention") {
+    const user = eventUser(event);
+    const text = optionalString(event.text);
+    const channel = eventChannel(event);
+    const ts = optionalString(event.ts);
+    if (!user || !text || !channel || !ts) return null;
+
+    return {
+      type,
+      user,
+      text,
+      channel,
+      ts,
+      thread_ts: optionalString(event.thread_ts),
+      event_ts: optionalString(event.event_ts),
+      bot_id: optionalString(event.bot_id),
+      subtype: optionalString(event.subtype),
+    };
+  }
+
+  if (type === "message" || type === "assistant_thread_message") {
+    const user = eventUser(event);
+    const text = optionalString(event.text);
+    const channel = eventChannel(event);
+    const ts = optionalString(event.ts);
+    const channelType = optionalString(event.channel_type);
+    if (!user || !text || !channel || !ts) return null;
+
+    return {
+      type,
+      user,
+      text,
+      channel,
+      ts,
+      thread_ts: optionalString(event.thread_ts),
+      event_ts: optionalString(event.event_ts),
+      channel_type: channelType,
+      bot_id: optionalString(event.bot_id),
+      subtype: optionalString(event.subtype),
+    };
+  }
+
+  if (type === "assistant_thread_started" || type === "assistant_thread_context_changed") {
+    const channel = eventChannel(event);
+    const threadTs = eventThreadTs(event);
+    if (!channel || !threadTs) return null;
+
+    return {
+      type,
+      channel,
+      thread_ts: threadTs,
+      user: eventUser(event),
+    };
+  }
+
+  return null;
+}
+
 function parseSlackEventsPayload(rawBody: string): SlackEventsPayload | null {
   try {
     const payload: unknown = JSON.parse(rawBody);
@@ -46,33 +148,15 @@ function parseSlackEventsPayload(rawBody: string): SlackEventsPayload | null {
       return null;
     }
 
-    const event = payload.event;
-    if (
-      event.type !== "app_mention" ||
-      typeof event.user !== "string" ||
-      typeof event.text !== "string" ||
-      typeof event.channel !== "string" ||
-      typeof event.ts !== "string"
-    ) {
-      return null;
-    }
+    const event = parseSupportedEvent(payload.event);
+    if (!event) return null;
 
     return {
       type: "event_callback",
       team_id: payload.team_id,
       event_id: payload.event_id,
       event_time: typeof payload.event_time === "number" ? payload.event_time : undefined,
-      event: {
-        type: "app_mention",
-        user: event.user,
-        text: event.text,
-        channel: event.channel,
-        ts: event.ts,
-        thread_ts: typeof event.thread_ts === "string" ? event.thread_ts : undefined,
-        event_ts: typeof event.event_ts === "string" ? event.event_ts : undefined,
-        bot_id: typeof event.bot_id === "string" ? event.bot_id : undefined,
-        subtype: typeof event.subtype === "string" ? event.subtype : undefined,
-      },
+      event,
     };
   } catch {
     return null;
@@ -93,6 +177,31 @@ function isDuplicateEvent(eventId: string): boolean {
     processedEventIds.delete(oldestEventId);
   }
   return false;
+}
+
+function hasBotOrSubtype(event: SlackSupportedEvent): boolean {
+  return "bot_id" in event && Boolean(event.bot_id || event.subtype);
+}
+
+function isAssistantMessageEvent(event: SlackSupportedEvent): boolean {
+  if (event.type === "assistant_thread_message") return true;
+  return event.type === "message" && event.channel_type === "im";
+}
+
+async function postAssistantFailure(
+  teamId: string,
+  channelId: string,
+  threadTs: string,
+): Promise<void> {
+  await clearAssistantStatus({ teamId, channelId, threadTs });
+  await postAssistantResponse(
+    { teamId, channelId, threadTs },
+    actionErrorBlocks(
+      "OpsPilot could not complete that request",
+      "Please try again, or run `/opspilot help` to see supported commands.",
+    ),
+    "OpsPilot could not complete that request.",
+  );
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -121,7 +230,54 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
   }
 
-  if (payload.event.bot_id || payload.event.subtype || isDuplicateEvent(payload.event_id)) {
+  if (hasBotOrSubtype(payload.event) || isDuplicateEvent(payload.event_id)) {
+    return new NextResponse(null, { status: 200 });
+  }
+
+  if (payload.event.type === "assistant_thread_started") {
+    const { channel, thread_ts: threadTs } = payload.event;
+    after(async () => {
+      await setAssistantSuggestedPrompts({
+        teamId: payload.team_id,
+        channelId: channel,
+        threadTs,
+      });
+    });
+    return new NextResponse(null, { status: 200 });
+  }
+
+  if (payload.event.type === "assistant_thread_context_changed") {
+    logger.info("Slack assistant thread context changed", {
+      eventId: payload.event_id,
+      teamId: payload.team_id,
+      channelId: payload.event.channel,
+      threadTs: payload.event.thread_ts,
+    });
+    return new NextResponse(null, { status: 200 });
+  }
+
+  if (payload.event.type === "message" && !isAssistantMessageEvent(payload.event)) {
+    return new NextResponse(null, { status: 200 });
+  }
+
+  const channelId = payload.event.channel;
+  const threadTs =
+    payload.event.type === "app_mention" ||
+    payload.event.type === "message" ||
+    payload.event.type === "assistant_thread_message"
+      ? payload.event.thread_ts ?? payload.event.ts
+      : payload.event.thread_ts;
+  const userId = "user" in payload.event ? payload.event.user : "unknown";
+  const text = "text" in payload.event ? payload.event.text : "";
+  const surface = payload.event.type === "app_mention" ? "mention" : "assistant";
+  const eventType = payload.event.type;
+
+  if (!threadTs) {
+    logger.warn("Ignored Slack conversational event without thread timestamp", {
+      eventId: payload.event_id,
+      eventType,
+      channelId,
+    });
     return new NextResponse(null, { status: 200 });
   }
 
@@ -129,17 +285,22 @@ export async function POST(request: Request): Promise<NextResponse> {
     try {
       await handleConversationalRequest({
         teamId: payload.team_id,
-        channelId: payload.event.channel,
-        userId: payload.event.user,
-        text: payload.event.text,
-        threadTs: payload.event.thread_ts ?? payload.event.ts,
+        channelId,
+        userId,
+        text,
+        threadTs,
+        surface,
       });
     } catch (error) {
-      logger.error("Failed to handle Slack app mention", {
+      logger.error("Failed to handle Slack conversational event", {
         eventId: payload.event_id,
-        channelId: payload.event.channel,
+        channelId,
+        eventType,
         error: error instanceof Error ? error.message : String(error),
       });
+      if (eventType !== "app_mention") {
+        await postAssistantFailure(payload.team_id, channelId, threadTs);
+      }
     }
   });
 

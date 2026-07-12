@@ -16,8 +16,8 @@ const steps = [
   {
     number: "03",
     title: "Use OpsPilot inside Slack",
-    copy: "Start from a mention or slash command in the channel where the first signal appears.",
-    detail: "@OpsPilot investigate checkout failures\n/opspilot investigate checkout API is failing",
+    copy: "Start from Slack's agent surface, a mention, or a slash command in the channel where the first signal appears.",
+    detail: "Slack agent · @OpsPilot · /opspilot",
   },
   {
     number: "04",

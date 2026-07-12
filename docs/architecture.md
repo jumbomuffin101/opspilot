@@ -8,8 +8,10 @@ OpsPilot separates Slack transport, evidence collection, reasoning, and presenta
 flowchart TB
     subgraph Slack["Slack interface"]
         User["Responder"]
+        AgentSurface["Slack agent surface"]
         Command["@OpsPilot or /opspilot"]
         Ack["Immediate Block Kit acknowledgement"]
+        AssistantUX["Suggested prompts / status / title"]
         Result["Incident brief"]
         Actions["Interactive actions"]
     end
@@ -19,6 +21,7 @@ flowchart TB
         EventsRoute["POST /api/slack/events"]
         ActionRoute["POST /api/slack/actions"]
         Verify["HMAC signature verification"]
+        AssistantHelpers["Slack assistant helpers"]
         IntentRouter["Intent Router"]
         Context["Persistent incident memory"]
         Workspace["Workspace installation/config stores"]
@@ -46,8 +49,10 @@ flowchart TB
         Mocks["Deterministic fixtures"]
     end
 
+    User --> AgentSurface --> EventsRoute --> Verify
     User --> Command --> CommandRoute --> Verify
     Command --> EventsRoute --> Verify
+    Verify --> AssistantHelpers --> AssistantUX --> User
     Verify --> Ack --> User
     Verify --> Agent --> Aggregator --> Registry
     Registry --> SlackTool
@@ -94,6 +99,18 @@ Slash-command payloads do not provide the acknowledgement message timestamp. Bec
 5. Investigations call the existing incident agent and store an `IncidentContext` keyed by workspace, channel, and thread when available. Follow-up intents prefer thread context, then channel context.
 
 When `DATABASE_URL` is configured, incident memory is stored in PostgreSQL with a 12-hour expiration window. If the database is missing or unavailable, the app falls back to the bounded in-memory store instead of failing Slack responses.
+
+## Slack Agents & AI Apps flow
+
+OpsPilot also supports Slack's official Agents & AI Apps experience through the same signed Events API route:
+
+1. `assistant_thread_started` sets concise suggested prompts for common OpsPilot workflows.
+2. Assistant-thread user messages reuse the existing conversational intent router and response handlers.
+3. Long-running workflows call `assistant.threads.setStatus` with short progress text such as "Reviewing deployments and code changes..." or "Preparing risk assessment...".
+4. The first meaningful request sets a contextual thread title with `assistant.threads.setTitle`, for example "Checkout incident investigation" or "OpsPilot repository audit".
+5. `assistant_thread_context_changed` is acknowledged and logged without message contents; it exists for future channel/thread context enrichment.
+
+Assistant helper calls are best-effort. If a workspace does not support one of the assistant APIs or a token is missing a required capability, the request still completes through the normal Slack message path. Mentions, slash commands, and Block Kit actions remain supported.
 
 ## Workspace onboarding and repository configuration
 

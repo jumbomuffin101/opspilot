@@ -21,6 +21,10 @@ export function Hero() {
         Investigate outages, coordinate responders, analyze deployments, and generate
         postmortems—all without leaving Slack.
       </p>
+      <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-slate-500">
+        Use OpsPilot from Slack&apos;s agent experience, mention it in a channel, or launch
+        a workflow with /opspilot.
+      </p>
       <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
         <AddToSlackButton />
         <a

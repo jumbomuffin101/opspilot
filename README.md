@@ -17,6 +17,8 @@ The web application is a submission and architecture surface. **Slack is the pri
 
 Then continue naturally: `@OpsPilot explain why you think the database is responsible` or `@OpsPilot generate an executive summary`.
 
+Recommended conversational path: open OpsPilot from Slack's Agents & AI Apps surface. Mentions and slash commands remain fully supported.
+
 For judging, set `DEMO_MODE=true`. The checkout scenario then uses deterministic Slack history, commits, deployments, ownership, prior incidents, and reasoning while still receiving real signed Slack commands and button actions.
 
 ## Workflows
@@ -80,6 +82,7 @@ Slack OAuth, per-workspace GitHub OAuth, repository picking, and project configu
 ## Features
 
 - Signed Slack Events API, slash-command, and interactivity endpoints
+- Slack Agents & AI Apps assistant threads with suggested prompts, live status updates, and contextual thread titles
 - Natural-language intent routing across incident and repository-audit intents
 - Threaded `@OpsPilot` conversations with active incident context
 - Fast acknowledgement with deferred investigation delivery
@@ -268,7 +271,8 @@ The endpoint returns only safe summary fields: incident ID, title, service, seve
 ## Slack setup
 
 1. Create a Slack app.
-2. Add bot scopes:
+2. Enable **Agents & AI Apps** in the Slack developer dashboard for the app.
+3. Add bot scopes:
    - `commands`
    - `app_mentions:read`
    - `chat:write`
@@ -277,46 +281,55 @@ The endpoint returns only safe summary fields: incident ID, title, service, seve
    - `groups:read`
    - `users:read`
    - `chat:write.public` when posting to public channels the app has not joined
-3. Under **OAuth & Permissions**, set the redirect URL:
+4. Under **OAuth & Permissions**, set the redirect URL:
 
    ```text
    https://<your-domain>/api/slack/oauth/callback
    ```
 
-4. Configure environment variables:
+5. Configure environment variables:
    - `SLACK_CLIENT_ID`
    - `SLACK_CLIENT_SECRET`
    - `SLACK_REDIRECT_URI=https://<your-domain>/api/slack/oauth/callback`
    - `SLACK_SIGNING_SECRET`
 
-5. The homepage **Add to Slack** button uses `NEXT_PUBLIC_SLACK_INSTALL_URL` when provided. Otherwise it links to:
+6. The homepage **Add to Slack** button uses `NEXT_PUBLIC_SLACK_INSTALL_URL` when provided. Otherwise it links to:
 
    ```text
    https://<your-domain>/api/slack/install
    ```
 
-6. Create `/opspilot` under **Slash Commands** with:
+7. Create `/opspilot` under **Slash Commands** with:
 
    ```text
    https://<your-domain>/api/slack/commands
    ```
 
-7. Enable **Interactivity & Shortcuts** with:
+8. Enable **Interactivity & Shortcuts** with:
 
    ```text
    https://<your-domain>/api/slack/actions
    ```
 
-8. Under **Event Subscriptions**, enable events and set the request URL to:
+9. Under **Event Subscriptions**, enable events and set the request URL to:
 
    ```text
    https://<your-domain>/api/slack/events
    ```
 
-9. Subscribe to the bot event `app_mention`.
-10. Install through Add to Slack. OpsPilot stores the workspace bot token in `slack_installations`.
-11. For manual/demo installs, `SLACK_BOT_TOKEN` remains supported as a global fallback.
-12. For local Slack testing, expose `npm run dev` through an HTTPS tunnel and use that public URL.
+10. Subscribe to these bot events:
+   - `app_mention`
+   - `assistant_thread_started`
+   - `assistant_thread_context_changed`
+11. Install through Add to Slack. OpsPilot stores the workspace bot token in `slack_installations`.
+12. For manual/demo installs, `SLACK_BOT_TOKEN` remains supported as a global fallback.
+13. For local Slack testing, expose `npm run dev` through an HTTPS tunnel and use that public URL.
+
+### Slack Agents & AI Apps behavior
+
+When a user opens OpsPilot from Slack's official agent surface, OpsPilot handles assistant-thread events through the same signed Events API route used for mentions. It sets concise suggested prompts, displays `assistant.threads.setStatus` updates while work is running, and sets contextual assistant thread titles such as "Checkout incident investigation", "OpsPilot repository audit", "Release test plan", and "Incident postmortem".
+
+Assistant status and title calls are best-effort. If Slack rejects or does not support a helper call in a workspace, OpsPilot logs a concise warning and still completes the response through the normal Slack message path.
 
 ## GitHub OAuth setup
 
