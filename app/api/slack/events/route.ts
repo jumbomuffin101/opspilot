@@ -183,9 +183,13 @@ function hasBotOrSubtype(event: SlackSupportedEvent): boolean {
   return "bot_id" in event && Boolean(event.bot_id || event.subtype);
 }
 
-function isAssistantMessageEvent(event: SlackSupportedEvent): boolean {
-  if (event.type === "assistant_thread_message") return true;
+function isDirectMessageEvent(event: SlackSupportedEvent): boolean {
   return event.type === "message" && event.channel_type === "im";
+}
+
+function isAssistantThreadMessageEvent(event: SlackSupportedEvent): boolean {
+  if (event.type === "assistant_thread_message") return true;
+  return false;
 }
 
 async function postAssistantFailure(
@@ -230,7 +234,25 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
   }
 
-  if (hasBotOrSubtype(payload.event) || isDuplicateEvent(payload.event_id)) {
+  logger.info("Slack event received", {
+    eventId: payload.event_id,
+    teamId: payload.team_id,
+    eventType: payload.event.type,
+    channelType: "channel_type" in payload.event ? payload.event.channel_type : undefined,
+  });
+
+  if (hasBotOrSubtype(payload.event)) {
+    logger.info("Ignored Slack bot or subtype message", {
+      eventId: payload.event_id,
+      eventType: payload.event.type,
+      channelId: "channel" in payload.event ? payload.event.channel : undefined,
+      subtype: "subtype" in payload.event ? payload.event.subtype : undefined,
+      hasBotId: "bot_id" in payload.event ? Boolean(payload.event.bot_id) : false,
+    });
+    return new NextResponse(null, { status: 200 });
+  }
+
+  if (isDuplicateEvent(payload.event_id)) {
     return new NextResponse(null, { status: 200 });
   }
 
@@ -256,7 +278,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     return new NextResponse(null, { status: 200 });
   }
 
-  if (payload.event.type === "message" && !isAssistantMessageEvent(payload.event)) {
+  if (
+    payload.event.type === "message" &&
+    !isDirectMessageEvent(payload.event) &&
+    !isAssistantThreadMessageEvent(payload.event)
+  ) {
+    logger.info("Ignored unsupported Slack message event", {
+      eventId: payload.event_id,
+      channelId: payload.event.channel,
+      channelType: payload.event.channel_type,
+    });
     return new NextResponse(null, { status: 200 });
   }
 
@@ -271,6 +302,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const text = "text" in payload.event ? payload.event.text : "";
   const surface = payload.event.type === "app_mention" ? "mention" : "assistant";
   const eventType = payload.event.type;
+  const isDirectMessage = isDirectMessageEvent(payload.event);
 
   if (!threadTs) {
     logger.warn("Ignored Slack conversational event without thread timestamp", {
@@ -279,6 +311,16 @@ export async function POST(request: Request): Promise<NextResponse> {
       channelId,
     });
     return new NextResponse(null, { status: 200 });
+  }
+
+  if (isDirectMessage) {
+    logger.info("Slack direct message routed to OpsPilot conversation handler", {
+      eventId: payload.event_id,
+      teamId: payload.team_id,
+      channelId,
+      threadTs,
+      userId,
+    });
   }
 
   after(async () => {

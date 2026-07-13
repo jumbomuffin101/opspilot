@@ -14,17 +14,18 @@ Use this checklist before recording the demo, deploying to production, or submit
 - [ ] Add to Slack starts `/api/slack/install` or the configured public install URL.
 - [ ] Reinstalling the Slack app updates the existing workspace installation row.
 - [ ] OAuth redirect URL is configured as `/api/slack/oauth/callback`.
-- [ ] Required scopes are present: `commands`, `chat:write`, `channels:manage`, `channels:read`, `groups:read`, `users:read`, `app_mentions:read`.
+- [ ] Required scopes are present: `commands`, `chat:write`, `channels:manage`, `channels:read`, `groups:read`, `users:read`, `app_mentions:read`, `im:history`, `im:read`, `im:write`.
 - [ ] Agents & AI Apps is enabled in the Slack developer dashboard.
 - [ ] Slash command `/opspilot` points to `/api/slack/commands`.
 - [ ] Interactivity points to `/api/slack/actions`.
 - [ ] Event Subscriptions point to `/api/slack/events`.
-- [ ] Bot events are subscribed: `app_mention`, `assistant_thread_started`, `assistant_thread_context_changed`.
+- [ ] Bot events are subscribed: `app_mention`, `message.im`, `assistant_thread_started`, `assistant_thread_context_changed`.
 - [ ] Invalid Slack signatures are rejected.
 
 ## Slack agent experience
 
 - [ ] Open OpsPilot from Slack's agent/assistant surface.
+- [ ] Send a direct message in the agent conversation and receive an OpsPilot response.
 - [ ] Suggested prompts appear when the assistant thread starts.
 - [ ] Start an incident investigation from an assistant prompt or natural-language message.
 - [ ] Assistant status updates appear while work is processing.

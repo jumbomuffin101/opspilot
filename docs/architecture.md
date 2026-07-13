@@ -112,6 +112,8 @@ OpsPilot also supports Slack's official Agents & AI Apps experience through the 
 
 Assistant helper calls are best-effort. If a workspace does not support one of the assistant APIs or a token is missing a required capability, the request still completes through the normal Slack message path. Mentions, slash commands, and Block Kit actions remain supported.
 
+Slack also delivers user text typed in the agent direct-message conversation as the `message.im` bot event. OpsPilot treats those direct messages as conversational agent input, ignores bot/subtype message events such as edits/deletes/replies, and uses the message `ts` as the conversation thread identifier when Slack does not provide `thread_ts`.
+
 ## Workspace onboarding and repository configuration
 
 The public product flow starts at Add to Slack:

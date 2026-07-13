@@ -279,6 +279,9 @@ The endpoint returns only safe summary fields: incident ID, title, service, seve
    - `channels:manage`
    - `channels:read`
    - `groups:read`
+   - `im:history`
+   - `im:read`
+   - `im:write`
    - `users:read`
    - `chat:write.public` when posting to public channels the app has not joined
 4. Under **OAuth & Permissions**, set the redirect URL:
@@ -319,6 +322,7 @@ The endpoint returns only safe summary fields: incident ID, title, service, seve
 
 10. Subscribe to these bot events:
    - `app_mention`
+   - `message.im`
    - `assistant_thread_started`
    - `assistant_thread_context_changed`
 11. Install through Add to Slack. OpsPilot stores the workspace bot token in `slack_installations`.
@@ -328,6 +332,8 @@ The endpoint returns only safe summary fields: incident ID, title, service, seve
 ### Slack Agents & AI Apps behavior
 
 When a user opens OpsPilot from Slack's official agent surface, OpsPilot handles assistant-thread events through the same signed Events API route used for mentions. It sets concise suggested prompts, displays `assistant.threads.setStatus` updates while work is running, and sets contextual assistant thread titles such as "Checkout incident investigation", "OpsPilot repository audit", "Release test plan", and "Incident postmortem".
+
+User messages typed in the agent direct-message conversation are delivered by Slack as the `message.im` bot event. OpsPilot routes those direct messages through the same conversational handler as assistant and mention requests, ignores bot/subtype events, and uses the message `ts` as the conversation thread identifier when Slack does not include `thread_ts`.
 
 Assistant status and title calls are best-effort. If Slack rejects or does not support a helper call in a workspace, OpsPilot logs a concise warning and still completes the response through the normal Slack message path.
 
