@@ -1,11 +1,16 @@
 import { randomUUID } from "node:crypto";
 
+import {
+  normalizeDeploymentProvider,
+  normalizeServicePaths,
+  type DeploymentProvider,
+  type ServicePathMapping,
+} from "@/src/config/projectConfigValidation";
 import { getDatabasePool } from "@/src/lib/db";
 import { logger } from "@/src/lib/logger";
 
-export type DeploymentProvider = "mock" | "vercel" | "render" | "github_actions";
-
-export type ServicePathMapping = Record<string, string[]>;
+export { normalizeDeploymentProvider, normalizeServicePaths };
+export type { DeploymentProvider, ServicePathMapping };
 
 export interface ProjectConfig {
   teamId: string;
@@ -36,46 +41,10 @@ interface ProjectConfigRow {
   updated_at: Date | string;
 }
 
-const DEPLOYMENT_PROVIDERS = new Set<DeploymentProvider>([
-  "mock",
-  "vercel",
-  "render",
-  "github_actions",
-]);
-
 function isoTimestamp(value: Date | string): string {
   if (value instanceof Date) return value.toISOString();
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : new Date().toISOString();
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function normalizeServicePaths(value: unknown): ServicePathMapping | null {
-  if (!isRecord(value)) return null;
-
-  const normalized: ServicePathMapping = {};
-  for (const [service, paths] of Object.entries(value)) {
-    if (typeof service !== "string" || service.trim().length === 0) return null;
-    if (!Array.isArray(paths) || !paths.every((path) => typeof path === "string")) {
-      return null;
-    }
-
-    normalized[service.trim()] = paths
-      .map((path) => path.trim())
-      .filter((path) => path.length > 0);
-  }
-
-  return normalized;
-}
-
-export function normalizeDeploymentProvider(value: string): DeploymentProvider | null {
-  const normalized = value.trim().toLowerCase().replace(/[-\s]+/g, "_");
-  return DEPLOYMENT_PROVIDERS.has(normalized as DeploymentProvider)
-    ? (normalized as DeploymentProvider)
-    : null;
 }
 
 function toProjectConfig(row: ProjectConfigRow): ProjectConfig | null {

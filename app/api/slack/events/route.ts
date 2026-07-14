@@ -8,6 +8,7 @@ import {
 } from "@/src/slack/assistant";
 import { actionErrorBlocks } from "@/src/slack/blocks";
 import { handleConversationalRequest } from "@/src/slack/conversation";
+import { isBotOrSubtypeMessage, isDirectUserMessage } from "@/src/slack/eventFilters";
 import { verifySlackRequest } from "@/src/slack/middleware";
 import type {
   SlackEventCallbackEnvelope,
@@ -180,11 +181,11 @@ function isDuplicateEvent(eventId: string): boolean {
 }
 
 function hasBotOrSubtype(event: SlackSupportedEvent): boolean {
-  return "bot_id" in event && Boolean(event.bot_id || event.subtype);
+  return "bot_id" in event && isBotOrSubtypeMessage(event);
 }
 
 function isDirectMessageEvent(event: SlackSupportedEvent): boolean {
-  return event.type === "message" && event.channel_type === "im";
+  return event.type === "message" && isDirectUserMessage(event);
 }
 
 function isAssistantThreadMessageEvent(event: SlackSupportedEvent): boolean {
